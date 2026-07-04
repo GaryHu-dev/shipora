@@ -1,0 +1,15 @@
+{
+  "name": "shipora-backend",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-01-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    { "binding": "DB", "database_name": "shipora", "database_id": "PLACEHOLDER_LOCAL", "migrations_dir": "migrations" }
+  ],
+  "r2_buckets": [
+    { "binding": "PHOTOS", "bucket_name": "shipora-photos" }
+  ],
+  "vars": {
+    "APP_SECRET": "dev-only-secret-override-in-prod"
+  }
+}
