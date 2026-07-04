@@ -3,6 +3,8 @@ import type { Env } from "../types";
 import { requireSession, type AppVars } from "../auth/session";
 import { getOrderByIdForShop } from "../db/orders";
 import { createPhoto, listPhotosByOrder, getPhotoByIdForShop } from "../db/photos";
+import { getShopById } from "../db/shops";
+import { addOrderTag } from "../shopify/tags";
 import { putPhoto, getPhoto } from "../r2";
 import { newId } from "../ids";
 
@@ -35,6 +37,16 @@ photoRoutes.post("/orders/:orderId/photos", requireSession(), async (c) => {
     id: photoId, shopId, orderId, uploadedBy: c.get("userId"),
     r2Key, thumbKey, note, uploadedAt: now,
   });
+
+  // Best-effort Shopify timeline marker: tag the order. Never fail the upload on this.
+  try {
+    const shop = await getShopById(c.env.DB, shopId);
+    if (shop && shop.access_token) {
+      await addOrderTag(shop.shop_domain, shop.access_token, order.shopify_order_id, "发货照片已上传");
+    }
+  } catch (err) {
+    console.error("tag write-back failed", { orderId, err: String(err) });
+  }
 
   return c.json({ photo: { id: photoId, r2_key: r2Key, thumb_key: thumbKey, uploaded_at: now } });
 });

@@ -1,6 +1,10 @@
-import { env } from "cloudflare:test";
-import { describe, it, expect } from "vitest";
+import { env, fetchMock } from "cloudflare:test";
+import { describe, it, expect, beforeAll } from "vitest";
 import app from "../src/index";
+
+// The upload route now makes a best-effort Shopify tag call. Block outbound
+// network so that call fails fast and is swallowed by the route's try/catch.
+beforeAll(() => { fetchMock.activate(); fetchMock.disableNetConnect(); });
 import { createShop } from "../src/db/shops";
 import { createUser } from "../src/db/users";
 import { upsertOrder } from "../src/db/orders";
