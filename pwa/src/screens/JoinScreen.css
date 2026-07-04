@@ -1,0 +1,5 @@
+.join { max-width: 420px; margin: 0 auto; padding: 24px; }
+.join h1 { font-size: 20px; }
+.join input { width: 100%; padding: 12px; font-size: 16px; margin: 12px 0; box-sizing: border-box; }
+.join button { width: 100%; padding: 14px; font-size: 16px; }
+.join .error { color: #c0392b; margin-top: 12px; }

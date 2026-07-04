@@ -1,0 +1,9 @@
+.orders { max-width: 640px; margin: 0 auto; padding: 12px; }
+.orders .tabs { display: flex; gap: 8px; margin-bottom: 8px; }
+.orders .tabs button { flex: 1; padding: 10px; font-size: 14px; }
+.orders .tabs button[aria-pressed="true"] { font-weight: 700; border-bottom: 2px solid #111; }
+.orders input.search { width: 100%; padding: 10px; font-size: 16px; box-sizing: border-box; margin-bottom: 8px; }
+.orders .row { padding: 14px 8px; border-bottom: 1px solid #eee; cursor: pointer; }
+.orders .row .num { font-weight: 600; }
+.orders .row .meta { color: #666; font-size: 13px; }
+.orders .empty, .orders .loading { text-align: center; color: #888; padding: 40px 0; }
