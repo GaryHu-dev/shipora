@@ -1,0 +1,19 @@
+# Shipora app config — pushed to Shopify via: shopify app deploy
+client_id = "3232436b8e6157913cd02a1dc06a1e9a"
+name = "Shipora: Shipping Assistant"
+application_url = "https://shipora-backend.gary-hushek.workers.dev/admin"
+embedded = true
+
+[access_scopes]
+scopes = "read_orders,write_orders"
+
+[auth]
+redirect_urls = [
+  "https://shipora-backend.gary-hushek.workers.dev/auth/callback"
+]
+
+[webhooks]
+api_version = "2025-10"
+
+[pos]
+embedded = false

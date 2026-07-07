@@ -45,11 +45,22 @@ installRoutes.get("/auth/callback", async (c) => {
     await createShop(c.env.DB, { id: shopId, shopDomain: shop, accessToken: access_token, joinSecret: newId("jsec"), installedAt: now });
   }
 
+  // Best-effort so the install always completes (token is already stored) and a
+  // sync failure never blocks webhook registration — webhooks keep orders in sync.
   const stored = await getShopById(c.env.DB, shopId);
   if (stored) {
-    await syncRecentOrders(c.env.DB, stored, now);
-    await registerWebhooks(c.env, stored);
+    try {
+      await syncRecentOrders(c.env.DB, stored, now);
+    } catch (err) {
+      console.error("initial order sync failed", { shop, err: String(err) });
+    }
+    try {
+      await registerWebhooks(c.env, stored);
+    } catch (err) {
+      console.error("webhook registration failed", { shop, err: String(err) });
+    }
   }
 
-  return c.html("<h1>Shipora installed ✓</h1><p>You can close this window.</p>");
+  // Land the merchant back inside the embedded app now that the shop is installed.
+  return c.redirect(`https://${shop}/admin/apps/${c.env.SHOPIFY_API_KEY}`, 302);
 });

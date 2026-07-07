@@ -16,7 +16,7 @@ describe("addOrderTag", () => {
       .intercept({ path: `/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, method: "POST" })
       .reply(200, JSON.stringify({ data: { tagsAdd: { node: { id: "gid://order/1" }, userErrors: [] } } }));
 
-    await expect(addOrderTag("demo.myshopify.com", "tok", "gid://order/1", "发货照片已上传")).resolves.toBeUndefined();
+    await expect(addOrderTag("demo.myshopify.com", "tok", "gid://order/1", "Shipping photos uploaded")).resolves.toBeUndefined();
   });
 
   it("throws when Shopify returns userErrors", async () => {

@@ -30,6 +30,24 @@ function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
   return diff === 0;
 }
 
+// Constant-time string comparison for secrets (e.g. the admin key).
+export function timingSafeEqualStr(a: string, b: string): boolean {
+  return timingSafeEqual(new TextEncoder().encode(a), new TextEncoder().encode(b));
+}
+
+// Decode a token's payload WITHOUT verifying its signature — only for reading a
+// routing hint (e.g. which shop a join token targets) before verifying with that
+// shop's key. Never trust the result until verifyToken() has passed.
+export function decodeUnverified(token: string): Record<string, unknown> | null {
+  const encoded = token.split(".")[0];
+  if (!encoded) return null;
+  try {
+    return JSON.parse(new TextDecoder().decode(b64urlDecode(encoded)));
+  } catch {
+    return null;
+  }
+}
+
 export async function signToken(
   payload: Record<string, unknown>,
   secret: string,

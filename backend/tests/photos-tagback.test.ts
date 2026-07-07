@@ -1,6 +1,6 @@
 import { env, fetchMock } from "cloudflare:test";
 import { describe, it, expect, beforeAll, afterEach } from "vitest";
-import app from "../src/index";
+import { app } from "../src/index";
 import { createShop } from "../src/db/shops";
 import { createUser } from "../src/db/users";
 import { upsertOrder } from "../src/db/orders";

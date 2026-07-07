@@ -32,7 +32,8 @@ webhookRoutes.post("/webhooks/:topic{.+}", async (c) => {
   const shop = await c.env.DB.prepare("SELECT id FROM shops WHERE shop_domain = ?").bind(shopDomain).first<{ id: string }>();
   if (!shop) return c.body(null, 200); // unknown shop: ack so Shopify stops retrying
 
-  const payload = JSON.parse(new TextDecoder().decode(raw));
+  let payload: unknown;
+  try { payload = JSON.parse(new TextDecoder().decode(raw)); } catch { return c.body(null, 200); }
   const now = Math.floor(Date.now() / 1000);
 
   if (topic === "orders/create" || topic === "orders/updated") {

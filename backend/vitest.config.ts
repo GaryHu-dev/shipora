@@ -9,7 +9,15 @@ export default defineWorkersConfig({
       workers: {
         wrangler: { configPath: "./wrangler.jsonc" },
         miniflare: {
-          bindings: { TEST_MIGRATIONS: migrations },
+          // Test-only secret values (not real). Secrets live outside the
+          // committed wrangler.jsonc; tests inject deterministic fakes here.
+          bindings: {
+            TEST_MIGRATIONS: migrations,
+            APP_SECRET: "test-app-secret",
+            SHOPIFY_API_SECRET: "test-api-secret",
+            SHOPIFY_API_KEY: "test-api-key",
+            ADMIN_KEY: "test-admin-key",
+          },
         },
       },
     },

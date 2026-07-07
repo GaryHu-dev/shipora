@@ -33,7 +33,7 @@ export async function upsertOrder(
 export async function listOrders(
   db: D1Database,
   shopId: string,
-  opts: { status?: "unfulfilled" | "fulfilled" | "all"; q?: string }
+  opts: { status?: "unfulfilled" | "fulfilled" | "all"; q?: string; limit?: number; offset?: number }
 ): Promise<Order[]> {
   const status = opts.status ?? "unfulfilled";
   const clauses = ["shop_id = ?"];
@@ -49,8 +49,10 @@ export async function listOrders(
     binds.push(like, like);
   }
 
-  const sql = `SELECT * FROM orders WHERE ${clauses.join(" AND ")} ORDER BY created_at DESC`;
-  const { results } = await db.prepare(sql).bind(...binds).all<Order>();
+  const limit = Math.min(Math.max(opts.limit ?? 100, 1), 100);
+  const offset = Math.max(opts.offset ?? 0, 0);
+  const sql = `SELECT * FROM orders WHERE ${clauses.join(" AND ")} ORDER BY created_at DESC LIMIT ? OFFSET ?`;
+  const { results } = await db.prepare(sql).bind(...binds, limit, offset).all<Order>();
   return results;
 }
 
@@ -62,5 +64,16 @@ export async function getOrderByIdForShop(
   return await db
     .prepare("SELECT * FROM orders WHERE id = ? AND shop_id = ?")
     .bind(orderId, shopId)
+    .first<Order>();
+}
+
+export async function getOrderByShopifyId(
+  db: D1Database,
+  shopId: string,
+  shopifyOrderId: string
+): Promise<Order | null> {
+  return await db
+    .prepare("SELECT * FROM orders WHERE shop_id = ? AND shopify_order_id = ?")
+    .bind(shopId, shopifyOrderId)
     .first<Order>();
 }

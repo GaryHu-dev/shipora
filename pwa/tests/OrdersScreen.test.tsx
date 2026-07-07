@@ -1,11 +1,11 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import OrdersScreen from "../src/screens/OrdersScreen";
+import OrdersScreen, { resetOrdersCache } from "../src/screens/OrdersScreen";
 import * as client from "../src/api/client";
 import { saveSession } from "../src/auth/session";
 
-beforeEach(() => { localStorage.clear(); saveSession("tok", "Li"); vi.restoreAllMocks(); });
+beforeEach(() => { localStorage.clear(); resetOrdersCache(); saveSession("tok", "Li"); vi.restoreAllMocks(); });
 
 const ORDERS = [
   { id: "o1", order_number: "#1001", customer_name: "Alice", fulfillment_status: "unfulfilled", created_at: 10 },
@@ -18,25 +18,25 @@ describe("OrdersScreen", () => {
     render(<OrdersScreen onOpenOrder={onOpen} />);
 
     await waitFor(() => expect(screen.getByText("#1001")).toBeInTheDocument());
-    expect(spy).toHaveBeenCalledWith("tok", "unfulfilled", undefined);
+    expect(spy).toHaveBeenCalledWith("tok", "unfulfilled", undefined, 20, 0);
     expect(screen.getByText("Alice")).toBeInTheDocument();
 
     await userEvent.click(screen.getByText("#1001"));
     expect(onOpen).toHaveBeenCalledWith("o1");
   });
 
-  it("switches filter to 全部", async () => {
+  it("switches filter to All", async () => {
     const spy = vi.spyOn(client, "listOrders").mockResolvedValue(ORDERS);
     render(<OrdersScreen onOpenOrder={vi.fn()} />);
     await waitFor(() => expect(screen.getByText("#1001")).toBeInTheDocument());
 
-    await userEvent.click(screen.getByRole("button", { name: "全部" }));
-    await waitFor(() => expect(spy).toHaveBeenCalledWith("tok", "all", undefined));
+    await userEvent.click(screen.getByRole("button", { name: "All" }));
+    await waitFor(() => expect(spy).toHaveBeenCalledWith("tok", "all", undefined, 20, 0));
   });
 
   it("shows an empty state", async () => {
     vi.spyOn(client, "listOrders").mockResolvedValue([]);
     render(<OrdersScreen onOpenOrder={vi.fn()} />);
-    await waitFor(() => expect(screen.getByText(/没有订单/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/No orders/)).toBeInTheDocument());
   });
 });

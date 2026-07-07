@@ -6,6 +6,8 @@ export function mapFulfillment(displayStatus: string): "fulfilled" | "unfulfille
   return displayStatus === "FULFILLED" ? "fulfilled" : "unfulfilled";
 }
 
+// Note: no `customer` field — that needs the `read_customers` scope. We only
+// request order-level fields (read_orders). Customer name stays null.
 const ORDERS_QUERY = `
 query RecentOrders($first: Int!, $query: String!) {
   orders(first: $first, sortKey: CREATED_AT, reverse: true, query: $query) {
@@ -15,7 +17,6 @@ query RecentOrders($first: Int!, $query: String!) {
         name
         createdAt
         displayFulfillmentStatus
-        customer { displayName }
       }
     }
     pageInfo { hasNextPage }
@@ -30,7 +31,6 @@ interface OrdersResult {
         name: string;
         createdAt: string;
         displayFulfillmentStatus: string;
-        customer: { displayName: string | null } | null;
       };
     }[];
     pageInfo: { hasNextPage: boolean };
@@ -56,7 +56,7 @@ export async function syncRecentOrders(
       shopId: shop.id,
       shopifyOrderId: n.id,
       orderNumber: n.name,
-      customerName: n.customer?.displayName ?? null,
+      customerName: null,
       fulfillmentStatus: mapFulfillment(n.displayFulfillmentStatus),
       createdAt: Math.floor(Date.parse(n.createdAt) / 1000),
       syncedAt: nowSeconds,
