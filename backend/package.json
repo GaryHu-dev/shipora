@@ -19,6 +19,7 @@
     "wrangler": "^3.90.0"
   },
   "dependencies": {
-    "hono": "^4.6.0"
+    "hono": "^4.6.0",
+    "qrcode-generator": "^1.5.2"
   }
 }

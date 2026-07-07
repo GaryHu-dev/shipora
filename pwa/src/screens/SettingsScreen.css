@@ -1,0 +1,14 @@
+.settings { max-width: 640px; margin: 0 auto; padding: 8px 16px calc(16px + var(--safe-bottom)); }
+
+.settings .top { display: flex; align-items: center; gap: 6px; padding: 6px 0 14px; }
+.settings .top .back {
+  display: inline-flex; align-items: center; color: var(--primary); background: none; border: none;
+  font-size: 15px; font-weight: 600; padding: 6px 6px 6px 0;
+}
+.settings .top .back::before { content: "‹"; font-size: 22px; line-height: 1; margin-right: 2px; }
+.settings .top h1 { font-size: 20px; font-weight: 700; margin: 0; }
+
+.settings .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); }
+.settings .items-h { font-size: 11.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.settings .desc { color: var(--muted); font-size: 13px; margin: 4px 0 12px; }
+.settings .field { margin-bottom: 12px; }

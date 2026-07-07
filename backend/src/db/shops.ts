@@ -5,6 +5,7 @@ export interface Shop {
   join_secret: string;
   status: string;
   installed_at: number;
+  retention_days: number;
 }
 
 export async function createShop(
@@ -21,4 +22,13 @@ export async function createShop(
 
 export async function getShopById(db: D1Database, id: string): Promise<Shop | null> {
   return await db.prepare("SELECT * FROM shops WHERE id = ?").bind(id).first<Shop>();
+}
+
+export async function setRetentionDays(db: D1Database, id: string, days: number): Promise<void> {
+  await db.prepare("UPDATE shops SET retention_days = ? WHERE id = ?").bind(days, id).run();
+}
+
+// Rotating the join_secret invalidates every outstanding join link for this shop.
+export async function setJoinSecret(db: D1Database, id: string, secret: string): Promise<void> {
+  await db.prepare("UPDATE shops SET join_secret = ? WHERE id = ?").bind(secret, id).run();
 }

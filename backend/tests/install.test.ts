@@ -1,6 +1,6 @@
 import { env, fetchMock } from "cloudflare:test";
 import { describe, it, expect, beforeAll, afterEach } from "vitest";
-import app from "../src/index";
+import { app } from "../src/index";
 import { getShopById } from "../src/db/shops";
 import { signToken } from "../src/auth/tokens";
 import { SHOPIFY_API_VERSION } from "../src/shopify/graphql";
@@ -51,7 +51,8 @@ describe("GET /auth/callback", () => {
 
     const qs = await signedCallback(shop, state);
     const res = await app.request(`/auth/callback?${qs}`, {}, env);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toContain(`https://${shop}/admin/apps/`);
 
     const stored = await env.DB.prepare("SELECT * FROM shops WHERE shop_domain = ?").bind(shop).first<{ id: string; access_token: string }>();
     expect(stored?.access_token).toBe("shpat_xxx");

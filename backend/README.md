@@ -29,53 +29,120 @@ npm run dev         # local wrangler dev
 | GET  | `/auth/callback` | HMAC+state | finish install, sync orders, register webhooks |
 | POST | `/webhooks/:topic` | webhook HMAC | orders/create·updated, app/uninstalled |
 | POST | `/api/join` | join token | scan-to-join → create user + session |
-| GET  | `/api/orders?status=&q=` | session | list orders (default `unfulfilled`) |
-| POST | `/api/orders/:id/photos` | session | upload a photo (+ best-effort order tag) |
+| POST | `/api/me/name` | session | rename the signed-in staffer |
+| GET  | `/api/orders?status=&q=&limit=&offset=` | session | list orders, paginated (default `unfulfilled`) |
+| GET  | `/api/orders/:id` | session | order info + line items (image/qty/SKU) + shipping/billing address |
+| POST | `/api/orders/:id/photos` | session | upload a photo (+ order tag + Notes line) |
 | GET  | `/api/orders/:id/photos` | session | list an order's photos |
 | GET  | `/api/photos/:id/raw` | session | stream a photo |
+| DELETE | `/api/photos/:id` | session | delete a photo (+ remove its Notes line) |
+| GET  | `/p/:id` | rate-limited, edge-cached | short unguessable public photo URL (used by the block) |
+| GET  | `/admin` | Shopify host | embedded admin page; auto-starts OAuth if the shop isn't installed |
+| POST | `/admin/api/join-qr` | session token | mint a warehouse join QR + link |
+| POST | `/admin/api/reset-join-code` | session token | rotate the shop's join code (revoke old QRs) |
+| GET  | `/admin/api/recent-photos?q=` | session token | latest 10 photos, filterable by order number |
+| GET  | `/admin/api/order-photos?gid=` | session token | photos for a Shopify order GID (order-page block) |
+| GET  | `/admin/api/settings` · POST | session token | photo retention days (get/set) |
+| POST | `/admin/api/cleanup` | session token | delete expired photos now |
+| GET  | `/admin/api/photos/:id/raw` | session token | stream a photo (admin) |
 
-## Deploy (Task 7 — manual)
+`session token` = Shopify App Bridge `id_token` (a JWT). `session` = the PWA's own
+join-based token (signed with `APP_SECRET` + the shop's per-shop `join_secret`, so a
+shop can revoke its own links). Public photo URLs (`/p/:id`) are unguessable UUIDs,
+rate-limited per IP, and edge-cached.
 
-1. **Create Cloudflare resources**
+## Deploy
+
+> There is no separate "create Worker" step — `wrangler deploy` creates (or updates) the
+> Worker named in `wrangler.jsonc` (`"name": "shipora-backend"`) and gives it a
+> `https://<name>.<your-subdomain>.workers.dev` URL. Change `name` if you want a
+> different Worker name.
+
+0. **Prerequisites** — Node 18+, a Cloudflare account, a Shopify Partner/Dev account.
 
    ```bash
-   npx wrangler d1 create shipora            # paste database_id into wrangler.jsonc
-   npx wrangler r2 bucket create shipora-photos
-   npx wrangler d1 migrations apply shipora --remote
+   cd backend
+   npm install
+   npx wrangler login          # authorize wrangler with your Cloudflare account
    ```
 
-2. **Create the Shopify app** (Partner Dashboard)
-   - App URL: `https://<your-worker>.workers.dev/auth`
-   - Allowed redirection URL: `https://<your-worker>.workers.dev/auth/callback`
+1. **Create Cloudflare resources** and wire their IDs into `wrangler.jsonc`
+
+   ```bash
+   npx wrangler d1 create shipora
+   #  → copy the printed database_id into wrangler.jsonc  ("d1_databases"[0].database_id)
+
+   npx wrangler r2 bucket create shipora-photos          # matches the "r2_buckets" binding
+
+   npx wrangler d1 migrations apply shipora --remote     # create the tables
+   ```
+
+2. **Create the Shopify app** (Partner/Dev Dashboard → Apps → Create app manually)
+   - App URL: `https://<name>.<subdomain>.workers.dev/admin`
+   - Allowed redirection URL: `https://<name>.<subdomain>.workers.dev/auth/callback`
    - Scopes: `read_orders,write_orders`
-   - Copy the API key + secret.
+   - Copy the **Client ID** and **Client secret**.
 
 3. **Configure secrets & vars**
 
-   ```bash
-   npx wrangler secret put SHOPIFY_API_SECRET
-   npx wrangler secret put APP_SECRET
-   ```
-
-   In `wrangler.jsonc` `vars`, set real `SHOPIFY_API_KEY`, `SHOPIFY_SCOPES`, `APP_URL`,
-   and **remove** the test `SHOPIFY_API_SECRET` / `APP_SECRET` from `vars` so the
-   secrets take effect.
-
-4. **Deploy & install**
+   Secrets are **never** committed — they live on Cloudflare (production) or in
+   `.dev.vars` (local, gitignored). Set them:
 
    ```bash
-   npx wrangler deploy
+   npx wrangler secret put APP_SECRET           # a long random string you generate
+   npx wrangler secret put SHOPIFY_API_SECRET   # Shopify Client secret
+   npx wrangler secret put SHOPIFY_API_KEY      # Shopify Client ID
+   npx wrangler secret put ADMIN_KEY            # guards the standalone /qr page
    ```
 
-   Visit `https://<your-worker>.workers.dev/auth?shop=<dev-store>.myshopify.com`, approve.
+   Non-secret config (`SHOPIFY_SCOPES`, `APP_URL`, `PWA_URL`) lives in `wrangler.jsonc`
+   `vars` — set `APP_URL` to your Worker URL and `PWA_URL` to your deployed PWA origin.
 
-5. **Verify end to end**
+   For **local** development, copy `.dev.vars.example` → `.dev.vars` and fill it in;
+   `wrangler dev` reads it. Tests use the fixed values in `vitest.config.ts`.
+
+4. **Deploy the Worker**
+
+   ```bash
+   npx wrangler deploy          # creates/updates the Worker + prints its URL
+   ```
+
+5. **Deploy the PWA and the block extension** (once, then re-deploy on changes)
+
+   ```bash
+   # PWA → Cloudflare Pages  (creates the project on first run)
+   cd ../pwa
+   VITE_API_BASE=https://<name>.<subdomain>.workers.dev npm run build
+   npx wrangler pages deploy dist --project-name=shipora-pwa
+   #  → set the backend var PWA_URL to the printed Pages URL, then re-`wrangler deploy` the backend
+
+   # Order-page block extension (optional) → Shopify
+   cd ../shopify-app
+   npx @shopify/cli app deploy
+   ```
+
+6. **Install on a store & verify**
+   - Open the app in Shopify admin (or the Custom-distribution install link). `/admin`
+     auto-starts OAuth if the shop isn't installed yet; approve the scopes.
    - `npx wrangler d1 execute shipora --remote --command "SELECT order_number, fulfillment_status FROM orders"`
-   - Upload a photo (via curl or Plan 3's PWA) → open the order in Shopify admin →
-     confirm the tag `发货照片已上传` shows as an event in the order **Timeline**.
+   - Upload a photo (via the PWA) → open the order in Shopify admin → confirm the tag
+     **`Shipping photos uploaded`** in the order **Timeline** and the **Shipora block**.
+
+## On photo upload
+
+Each upload is best-effort written back to Shopify (failures never fail the upload):
+- **Tag** `Shipping photos uploaded` → a marker event in the order **Timeline**;
+- **Notes** — an audit line under a single `Shipora` header (`<type> uploaded by <name>`);
+  deleting the photo removes its matching line.
+
+Photos are viewed on the order page via the **order-details block extension**
+(`shopify-app/`, deployed with the Shopify CLI), which calls `/admin/api/order-photos`
+and links to the short `/p/:id` URLs.
 
 ## Notes
 
-- Thumbnails are generated client-side (PWA); the backend stores bytes verbatim.
-- GDPR compliance webhooks, Shopify Billing, and Protected Customer Data approval
+- Thumbnails and rotation are done client-side (PWA canvas); the backend stores bytes verbatim.
+- Uploads are image-only (`jpeg`/`png`/`webp`) and capped at 12 MB; served with `nosniff`.
+- A daily cron (`0 3 * * *`) deletes photos older than each shop's retention window.
+- GDPR compliance webhooks, Shopify Billing, and full Protected Customer Data approval
   are deferred until App-Store submission (self-use first).

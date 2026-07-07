@@ -12,3 +12,10 @@ class MemoryStorage implements Storage {
   setItem(k: string, v: string) { this.m.set(k, String(v)); }
 }
 Object.defineProperty(globalThis, "localStorage", { value: new MemoryStorage(), configurable: true });
+Object.defineProperty(globalThis, "sessionStorage", { value: new MemoryStorage(), configurable: true });
+
+// jsdom doesn't implement object URLs; stub them for the photo gallery.
+if (!URL.createObjectURL) {
+  URL.createObjectURL = () => "blob:mock";
+  URL.revokeObjectURL = () => {};
+}

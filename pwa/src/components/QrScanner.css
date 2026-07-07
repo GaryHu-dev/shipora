@@ -1,0 +1,23 @@
+.scanner {
+  position: fixed; inset: 0; z-index: 100; background: #000;
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+.scanner video { width: 100%; height: 100%; object-fit: cover; }
+.scanner-frame {
+  position: absolute; width: 240px; height: 240px;
+  border: 3px solid rgba(255, 255, 255, 0.95); border-radius: 18px;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+}
+.scanner-hint {
+  position: absolute; top: calc(40px + var(--safe-top)); left: 0; right: 0;
+  text-align: center; color: #fff; font-size: 15px; padding: 0 24px;
+}
+.scanner-error {
+  position: absolute; left: 24px; right: 24px; color: #fff; font-size: 15px;
+  text-align: center; line-height: 1.5;
+}
+.scanner-close {
+  position: absolute; bottom: calc(32px + var(--safe-bottom)); left: 50%; transform: translateX(-50%);
+  padding: 13px 28px; background: #fff; color: #111827; border: none; border-radius: 12px;
+  font-size: 16px; font-weight: 600;
+}

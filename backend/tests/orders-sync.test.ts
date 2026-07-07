@@ -42,7 +42,7 @@ describe("syncRecentOrders", () => {
     const all = await listOrders(env.DB, "sync1", { status: "all" });
     expect(all.map((o) => o.order_number).sort()).toEqual(["#1001", "#1002"]);
     const o1 = all.find((o) => o.shopify_order_id === "gid://order/1")!;
-    expect(o1.customer_name).toBe("Alice");
+    expect(o1.customer_name).toBeNull(); // customer not queried (needs read_customers)
     expect(o1.fulfillment_status).toBe("unfulfilled");
     const o2 = all.find((o) => o.shopify_order_id === "gid://order/2")!;
     expect(o2.customer_name).toBeNull();

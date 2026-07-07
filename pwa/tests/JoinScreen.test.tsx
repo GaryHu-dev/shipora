@@ -13,23 +13,23 @@ describe("JoinScreen", () => {
     const onJoined = vi.fn();
     render(<JoinScreen joinToken="jt" onJoined={onJoined} />);
 
-    await userEvent.type(screen.getByLabelText("你的名字"), "Wang");
-    await userEvent.click(screen.getByRole("button", { name: "加入" }));
+    await userEvent.type(screen.getByLabelText("Your name"), "Wang");
+    await userEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     await waitFor(() => expect(onJoined).toHaveBeenCalled());
     expect(getSession()).toEqual({ token: "s1", name: "Wang" });
   });
 
-  it("shows an error when the join token is missing", () => {
+  it("offers a scan option when the join token is missing", () => {
     render(<JoinScreen joinToken={null} onJoined={vi.fn()} />);
-    expect(screen.getByText(/无效的邀请/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Scan QR/i })).toBeInTheDocument();
   });
 
   it("shows an error when join fails", async () => {
     vi.spyOn(client, "join").mockRejectedValue(new client.ApiError(401, "bad"));
     render(<JoinScreen joinToken="jt" onJoined={vi.fn()} />);
-    await userEvent.type(screen.getByLabelText("你的名字"), "Wang");
-    await userEvent.click(screen.getByRole("button", { name: "加入" }));
-    await waitFor(() => expect(screen.getByText(/加入失败/)).toBeInTheDocument());
+    await userEvent.type(screen.getByLabelText("Your name"), "Wang");
+    await userEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await waitFor(() => expect(screen.getByText(/Couldn't join/)).toBeInTheDocument());
   });
 });

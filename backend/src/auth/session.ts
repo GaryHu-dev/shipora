@@ -5,7 +5,7 @@ import { getUserById } from "../db/users";
 
 export type AppVars = { userId: string; shopId: string };
 
-const SESSION_TTL = 60 * 60 * 24 * 30; // 30 days
+const SESSION_TTL = 60 * 60 * 24 * 180; // 180 days
 
 export async function issueSession(
   secret: string,

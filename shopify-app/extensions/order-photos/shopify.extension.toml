@@ -1,0 +1,14 @@
+api_version = "2025-07"
+
+[[extensions]]
+name = "Order shipping photos"
+handle = "order-photos"
+uid = "1e28b313-facf-87b5-bb39-7cfc379eb44a36724c81"
+type = "ui_extension"
+
+  [[extensions.targeting]]
+  target = "admin.order-details.block.render"
+  module = "./src/OrderPhotosBlock.jsx"
+
+  [extensions.capabilities]
+  network_access = true

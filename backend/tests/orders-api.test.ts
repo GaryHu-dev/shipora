@@ -1,10 +1,13 @@
-import { env } from "cloudflare:test";
-import { describe, it, expect } from "vitest";
-import app from "../src/index";
+import { env, fetchMock } from "cloudflare:test";
+import { describe, it, expect, beforeAll } from "vitest";
+import { app } from "../src/index";
 import { createShop } from "../src/db/shops";
 import { createUser } from "../src/db/users";
 import { upsertOrder } from "../src/db/orders";
 import { issueSession } from "../src/auth/session";
+import { SHOPIFY_API_VERSION } from "../src/shopify/graphql";
+
+beforeAll(() => { fetchMock.activate(); fetchMock.disableNetConnect(); });
 
 function now() {
   return Math.floor(Date.now() / 1000);
@@ -45,5 +48,21 @@ describe("GET /api/orders", () => {
     const res = await get("/api/orders", tokenA);
     const data = await res.json<{ orders: { id: string }[] }>();
     expect(data.orders.map((o) => o.id)).toEqual(["a1"]);
+  });
+
+  it("GET /orders/:id returns order info, line items (with image) + address", async () => {
+    await seedTwoShops();
+    const path = `/admin/api/${SHOPIFY_API_VERSION}/graphql.json`;
+    fetchMock.get("https://a.myshopify.com").intercept({ path, method: "POST" })
+      .reply(200, JSON.stringify({ data: { order: { lineItems: { edges: [{ node: { title: "Widget", quantity: 2, sku: "SKU-1", image: { url: "https://img/x.png" } } }] } } } }));
+    fetchMock.get("https://a.myshopify.com").intercept({ path, method: "POST" })
+      .reply(200, JSON.stringify({ data: { order: { shippingAddress: { name: "Ann", address1: "1 St", address2: null, city: "Sydney", province: "NSW", zip: "2000", country: "Australia", phone: null } } } }));
+    const tokenA = await issueSession(env.APP_SECRET, { userId: "ua", shopId: "A" }, now());
+    const res = await get("/api/orders/a1", tokenA);
+    expect(res.status).toBe(200);
+    const data = await res.json<{ order: { order_number: string }; items: { title: string; quantity: number; sku: string | null; imageUrl: string | null }[]; address: { city: string } | null }>();
+    expect(data.order.order_number).toBe("#A1");
+    expect(data.items).toEqual([{ title: "Widget", quantity: 2, sku: "SKU-1", imageUrl: "https://img/x.png" }]);
+    expect(data.address?.city).toBe("Sydney");
   });
 });

@@ -1,5 +1,16 @@
-.join { max-width: 420px; margin: 0 auto; padding: 24px; }
-.join h1 { font-size: 20px; }
-.join input { width: 100%; padding: 12px; font-size: 16px; margin: 12px 0; box-sizing: border-box; }
-.join button { width: 100%; padding: 14px; font-size: 16px; }
-.join .error { color: #c0392b; margin-top: 12px; }
+.join {
+  min-height: 100vh; min-height: 100dvh;
+  display: flex; flex-direction: column; justify-content: center;
+  max-width: 420px; margin: 0 auto;
+  padding: 24px 24px calc(24px + var(--safe-bottom));
+}
+.join .logo {
+  width: 64px; height: 64px; border-radius: 18px; background: #111827;
+  margin: 0 auto 22px; display: flex; align-items: center; justify-content: center;
+}
+.join .logo .box { width: 30px; height: 30px; background: #f9fafb; border-radius: 7px; }
+.join h1 { font-size: 24px; text-align: center; margin: 0 0 6px; }
+.join .sub { text-align: center; color: var(--muted); margin: 0 0 28px; font-size: 15px; line-height: 1.4; }
+.join label { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 8px; }
+.join .field { margin-bottom: 16px; }
+.join .error { color: #b42318; margin-top: 16px; text-align: center; font-size: 14px; }

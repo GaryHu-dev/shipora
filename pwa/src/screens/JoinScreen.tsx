@@ -1,44 +1,74 @@
 import { useState } from "react";
 import { join, ApiError } from "../api/client";
-import { saveSession } from "../auth/session";
+import { saveSession, saveJoin } from "../auth/session";
+import QrScanner from "../components/QrScanner";
 import "./JoinScreen.css";
 
+// Pull the join token out of a scanned QR payload (a full join URL, or a bare token).
+function extractToken(s: string): string | null {
+  const m = s.match(/[?&]token=([^&\s]+)/);
+  if (m) return decodeURIComponent(m[1]);
+  const t = s.trim();
+  return /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(t) ? t : null;
+}
+
 export default function JoinScreen({ joinToken, onJoined }: { joinToken: string | null; onJoined: () => void }) {
+  const [scanned, setScanned] = useState<string | null>(null);
+  const [scanning, setScanning] = useState(false);
   const [name, setName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const token = joinToken || scanned;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
     try {
-      const { sessionToken, user } = await join(joinToken!, name.trim());
+      const { sessionToken, user } = await join(token!, name.trim());
       saveSession(sessionToken, user.name);
+      saveJoin(token!, user.name);
       onJoined();
     } catch (err) {
       const code = err instanceof ApiError ? ` (${err.status})` : "";
-      setError(`加入失败${code},请重试`);
+      setError(`Couldn't join${code}. Please try again.`);
     } finally {
       setSubmitting(false);
     }
   }
 
-  if (!joinToken) {
+  if (!token) {
     return (
       <div className="join">
-        <h1>加入发货团队</h1>
-        <p className="error">无效的邀请链接,请重新扫码。</p>
+        <div className="logo"><span className="box" /></div>
+        <h1>Join your team</h1>
+        <p className="sub">Scan the QR code from your manager to get started.</p>
+        <button type="button" className="btn" onClick={() => { setError(null); setScanning(true); }}>Scan QR code</button>
+        {error && <p className="error">{error}</p>}
+        {scanning && (
+          <QrScanner
+            onScan={(data) => {
+              setScanning(false);
+              const t = extractToken(data);
+              if (t) setScanned(t);
+              else setError("That QR code isn't a Shipora invite. Please try again.");
+            }}
+            onClose={() => setScanning(false)}
+          />
+        )}
       </div>
     );
   }
 
   return (
     <form className="join" onSubmit={submit}>
-      <h1>加入发货团队</h1>
-      <label htmlFor="name">你的名字</label>
-      <input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="例如:李四" />
-      <button type="submit" disabled={submitting || !name.trim()}>加入</button>
+      <div className="logo"><span className="box" /></div>
+      <h1>Almost there</h1>
+      <p className="sub">Add your name so each photo is logged to you.</p>
+      <label htmlFor="name">Your name</label>
+      <input id="name" className="field" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. John Smith" autoComplete="name" />
+      <button type="submit" className="btn" disabled={submitting || !name.trim()}>{submitting ? "Joining…" : "Continue"}</button>
       {error && <p className="error">{error}</p>}
     </form>
   );
