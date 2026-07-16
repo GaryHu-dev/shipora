@@ -1,8 +1,9 @@
 # Shipora Backend
 
 Cloudflare Worker (Hono) backend for Shipora — a Shopify shipping-photo-proof app.
-Stores shops/users/orders/photos in **D1** + **R2**, syncs orders from Shopify, and
-tags orders on photo upload so a marker appears in the Shopify order **Timeline**.
+Stores shops/users/orders/photos in **D1** + **R2**, syncs orders from Shopify, tags
+orders on photo upload (a marker in the Shopify order **Timeline**), and surfaces the
+photos in the order-details **admin block**.
 
 ## Stack
 
@@ -32,10 +33,10 @@ npm run dev         # local wrangler dev
 | POST | `/api/me/name` | session | rename the signed-in staffer |
 | GET  | `/api/orders?status=&q=&limit=&offset=` | session | list orders, paginated (default `unfulfilled`) |
 | GET  | `/api/orders/:id` | session | order info + line items (image/qty/SKU) + shipping/billing address |
-| POST | `/api/orders/:id/photos` | session | upload a photo (+ order tag + Notes line) |
+| POST | `/api/orders/:id/photos` | session | upload a photo (+ order tag) |
 | GET  | `/api/orders/:id/photos` | session | list an order's photos |
 | GET  | `/api/photos/:id/raw` | session | stream a photo |
-| DELETE | `/api/photos/:id` | session | delete a photo (+ remove its Notes line) |
+| DELETE | `/api/photos/:id` | session | delete a photo |
 | GET  | `/p/:id` | rate-limited, edge-cached | short unguessable public photo URL (used by the block) |
 | GET  | `/admin` | Shopify host | embedded admin page; auto-starts OAuth if the shop isn't installed |
 | POST | `/admin/api/join-qr` | session token | mint a warehouse join QR + link |
@@ -130,10 +131,9 @@ rate-limited per IP, and edge-cached.
 
 ## On photo upload
 
-Each upload is best-effort written back to Shopify (failures never fail the upload):
-- **Tag** `Shipping photos uploaded` → a marker event in the order **Timeline**;
-- **Notes** — an audit line under a single `Shipora` header (`<type> uploaded by <name>`);
-  deleting the photo removes its matching line.
+Each upload best-effort adds the order **tag** `Shipping photos uploaded` to Shopify
+(failures never fail the upload) → a marker event in the order **Timeline** and a handle
+for filtering orders.
 
 Photos are viewed on the order page via the **order-details block extension**
 (`shopify-app/`, deployed with the Shopify CLI), which calls `/admin/api/order-photos`

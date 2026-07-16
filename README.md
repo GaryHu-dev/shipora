@@ -13,12 +13,11 @@ phone as **proof of shipment**. English UI; works for any Shopify store; multi-t
 4. Staff open an order, take/pick one or more photos, review & rotate them, then upload.
 5. Each upload:
    - adds the order **tag** `Shipping photos uploaded` → a marker in the order **Timeline**;
-   - appends an audit line to the order **Notes** (`Shipora` header + `<type> uploaded by <name>`);
    - makes the photos viewable on the order page in the **Shipora block** and in the app.
 
 > Shopify has no public API to write custom order-timeline content, so the timeline
-> marker is an order **tag** (the reliable, supported approach); the Notes lines are the
-> human-readable audit trail; the **order-page block** is where photos are actually viewed.
+> marker is an order **tag** (the reliable, supported approach); the **order-page block**
+> is where the photos themselves are viewed.
 
 ## Features
 
@@ -30,8 +29,7 @@ phone as **proof of shipment**. English UI; works for any Shopify store; multi-t
 - Order detail: items to pack (product image, qty, name, SKU), Ship-to & Billing
   addresses, **Local pickup** badge when there's no shipping address.
 - Photos: batch capture (camera or library), preview & **rotate before upload** (baked
-  in), category chips, full-screen lightbox with rotate, swipe-left to delete (also
-  removes the matching Notes line).
+  in), category chips, full-screen lightbox with rotate, swipe-left to delete.
 - Menu → Settings (change your name), Add to Home Screen, Sign out.
 
 **Shopify side** (served by the backend)
