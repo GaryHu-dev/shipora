@@ -4,12 +4,10 @@ import { requireSession, type AppVars } from "../auth/session";
 import { getOrderByIdForShop } from "../db/orders";
 import { createPhoto, listOrderTimeline, getPhotoByIdForShop } from "../db/photos";
 import { getShopById } from "../db/shops";
-import { getUserById } from "../db/users";
 import { addOrderTag } from "../shopify/tags";
-import { appendOrderNote, removeOrderNoteLine } from "../shopify/notes";
 import { putPhoto, getPhoto } from "../r2";
 import { newId } from "../ids";
-import { normalizeCategory, CATEGORY_LABELS } from "../categories";
+import { normalizeCategory } from "../categories";
 
 export const photoRoutes = new Hono<{ Bindings: Env; Variables: AppVars }>();
 
@@ -50,22 +48,14 @@ photoRoutes.post("/orders/:orderId/photos", requireSession(), async (c) => {
     r2Key, thumbKey, note, uploadedAt: now, category, contentType,
   });
 
-  // Best-effort Shopify write-backs (never fail the upload on these):
-  //  - a tag (for filtering)
-  //  - an appended order note (creates a visible Timeline entry)
+  // Best-effort Shopify write-back (never fail the upload on this): a tag for
+  // filtering. Photos themselves surface in the admin order-details block.
   const shop = await getShopById(c.env.DB, shopId);
   if (shop && shop.access_token) {
     try {
       await addOrderTag(shop.shop_domain, shop.access_token, order.shopify_order_id, "Shipping photos uploaded");
     } catch (err) {
       console.error("tag write-back failed", { orderId, err: String(err) });
-    }
-    try {
-      const user = await getUserById(c.env.DB, c.get("userId"));
-      const label = CATEGORY_LABELS[category] ?? "Shipping photo";
-      await appendOrderNote(shop.shop_domain, shop.access_token, order.shopify_order_id, `${label} uploaded by ${user?.name ?? "staff"}`);
-    } catch (err) {
-      console.error("note write-back failed", { orderId, err: String(err) });
     }
   }
 
@@ -84,20 +74,6 @@ photoRoutes.delete("/photos/:photoId", requireSession(), async (c) => {
   await c.env.PHOTOS.delete(row.r2_key);
   if (row.thumb_key) await c.env.PHOTOS.delete(row.thumb_key);
   await c.env.DB.prepare("DELETE FROM shipment_photos WHERE id = ?").bind(row.id).run();
-
-  // Keep the Shopify order note in sync — drop one matching upload line.
-  try {
-    const shop = await getShopById(c.env.DB, shopId);
-    const order = await getOrderByIdForShop(c.env.DB, shopId, row.order_id);
-    if (shop?.access_token && order) {
-      const user = await getUserById(c.env.DB, row.uploaded_by);
-      const label = CATEGORY_LABELS[row.category] ?? "Shipping photo";
-      const line = `${label} uploaded by ${user?.name ?? "staff"}`;
-      await removeOrderNoteLine(shop.shop_domain, shop.access_token, order.shopify_order_id, line);
-    }
-  } catch (err) {
-    console.error("note cleanup on delete failed", { photoId: row.id, err: String(err) });
-  }
 
   return c.json({ ok: true });
 });
