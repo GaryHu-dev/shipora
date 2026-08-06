@@ -22,4 +22,23 @@ describe("GET /admin", () => {
     expect(html).toContain("/admin/oauth/authorize");
     expect(html).not.toContain("app-bridge");
   });
+
+  it("includes the Import tab and its upload form", async () => {
+    await createShop(env.DB, { id: "adm-page-import", shopDomain: "demo.myshopify.com", accessToken: "t", joinSecret: "j", installedAt: 1 });
+    const res = await app.request("/admin?shop=demo.myshopify.com", {}, env);
+    const html = await res.text();
+    expect(html).toContain('id="tab-import"');
+    expect(html).toContain('id="poFile"');
+    expect(html).toContain("/admin/api/purchase-orders/parse");
+    expect(html).toContain("/admin/api/purchase-orders/confirm");
+  });
+
+  it("includes the History tab and its list container", async () => {
+    await createShop(env.DB, { id: "adm-page-history", shopDomain: "demo.myshopify.com", accessToken: "t", joinSecret: "j", installedAt: 1 });
+    const res = await app.request("/admin?shop=demo.myshopify.com", {}, env);
+    const html = await res.text();
+    expect(html).toContain('id="tab-history"');
+    expect(html).toContain('id="poHistoryList"');
+    expect(html).toContain("/admin/api/purchase-orders");
+  });
 });
