@@ -24,7 +24,7 @@ function Header() {
 
   return (
     <div className="app-header">
-      <div className="brand"><img className="mark" src="/icon-192.png" alt="" /> Shipora</div>
+      <div className="brand"><img className="mark" src="/icon-192.png" alt="" /> StockProof</div>
       <div className="right">
         <span className="who">{session.name}</span>
         <button className="menu-btn" aria-label="Menu" onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}>☰</button>

@@ -52,7 +52,7 @@ export default function JoinScreen({ joinToken, onJoined }: { joinToken: string 
               setScanning(false);
               const t = extractToken(data);
               if (t) setScanned(t);
-              else setError("That QR code isn't a Shipora invite. Please try again.");
+              else setError("That QR code isn't a StockProof invite. Please try again.");
             }}
             onClose={() => setScanning(false)}
           />
