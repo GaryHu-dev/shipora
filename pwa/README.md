@@ -1,4 +1,4 @@
-# Shipora PWA
+# StockProof PWA
 
 Mobile web app (installable PWA) for warehouse staff. Talks to the
 [backend](../backend/README.md) over HTTPS with a Bearer session token in `localStorage`.

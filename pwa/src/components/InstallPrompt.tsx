@@ -68,9 +68,9 @@ export default function InstallPrompt() {
       <span className="ic" aria-hidden="true" />
       <div className="txt">
         {ios ? (
-          <>Add <b>Shipora</b> to your Home Screen — tap <b>Share&nbsp;⬆︎</b>, then <b>Add to Home Screen</b>.</>
+          <>Add <b>StockProof</b> to your Home Screen — tap <b>Share&nbsp;⬆︎</b>, then <b>Add to Home Screen</b>.</>
         ) : (
-          <>Install <b>Shipora</b> for quick one-tap access.</>
+          <>Install <b>StockProof</b> for quick one-tap access.</>
         )}
       </div>
       {!ios && <button className="add" onClick={install}>Add</button>}
