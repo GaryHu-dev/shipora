@@ -98,7 +98,7 @@ from the product's display name.)
 cd backend
 npm install
 cp .dev.vars.example .dev.vars     # fill in local secrets
-npm test                           # 133 tests, no live Shopify needed
+npm test                           # 134 tests, no live Shopify needed
 npm run dev                        # esbuild build → wrangler dev (see backend/build.mjs)
 
 # PWA — http://localhost:5173  (VITE_API_BASE points at the backend)
