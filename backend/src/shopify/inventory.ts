@@ -1,7 +1,5 @@
 import { shopifyGraphQL } from "./graphql";
-
-export const EXPIRY_METAFIELD_NAMESPACE = "shipora";
-export const EXPIRY_METAFIELD_KEY = "expiry_date";
+import { parseBbd, type BbdState } from "../bbd";
 
 export interface StoreLocation {
   id: string;
@@ -31,7 +29,7 @@ export interface LocationStock {
 
 export interface VariantState {
   inventoryItemId: string;
-  expiryDate: string | null;
+  currentBbd: BbdState;
   stockByLocation: LocationStock[];
   productTitle: string;
   productId: string;
@@ -39,18 +37,17 @@ export interface VariantState {
 }
 
 const VARIANT_STATE_QUERY = `
-query VariantState($id: ID!, $namespace: String!, $key: String!) {
+query VariantState($id: ID!) {
   productVariant(id: $id) {
     displayName
     image { url }
-    product { id title featuredImage { url } }
+    product { id title featuredImage { url } descriptionHtml }
     inventoryItem {
       id
       inventoryLevels(first: 50) {
         edges { node { location { id } quantities(names: ["available"]) { name quantity } } }
       }
     }
-    metafield(namespace: $namespace, key: $key) { value }
   }
 }`;
 
@@ -58,14 +55,13 @@ interface VariantStateResult {
   productVariant: {
     displayName: string;
     image: { url: string } | null;
-    product: { id: string; title: string; featuredImage: { url: string } | null };
+    product: { id: string; title: string; featuredImage: { url: string } | null; descriptionHtml: string };
     inventoryItem: {
       id: string;
       inventoryLevels: {
         edges: { node: { location: { id: string }; quantities: { name: string; quantity: number }[] } }[];
       };
     };
-    metafield: { value: string } | null;
   } | null;
 }
 
@@ -76,15 +72,13 @@ export async function getVariantState(
 ): Promise<VariantState | null> {
   const data = await shopifyGraphQL<VariantStateResult>(shopDomain, accessToken, VARIANT_STATE_QUERY, {
     id: variantId,
-    namespace: EXPIRY_METAFIELD_NAMESPACE,
-    key: EXPIRY_METAFIELD_KEY,
   });
   const variant = data.productVariant;
   if (!variant) return null;
 
   return {
     inventoryItemId: variant.inventoryItem.id,
-    expiryDate: variant.metafield?.value ?? null,
+    currentBbd: parseBbd(variant.product.descriptionHtml),
     stockByLocation: variant.inventoryItem.inventoryLevels.edges.map((e) => ({
       locationId: e.node.location.id,
       available: e.node.quantities.find((q) => q.name === "available")?.quantity ?? 0,
@@ -122,30 +116,4 @@ export async function adjustInventory(
   });
   const errs = data.inventoryAdjustQuantities.userErrors;
   if (errs.length > 0) throw new Error(`inventoryAdjustQuantities userErrors: ${errs.map((e) => e.message).join("; ")}`);
-}
-
-const SET_METAFIELDS_MUTATION = `
-mutation SetMetafields($metafields: [MetafieldsSetInput!]!) {
-  metafieldsSet(metafields: $metafields) {
-    userErrors { field message }
-  }
-}`;
-
-interface SetMetafieldsResult {
-  metafieldsSet: { userErrors: { field: string[] | string | null; message: string }[] };
-}
-
-export async function setExpiryDateMetafield(
-  shopDomain: string,
-  accessToken: string,
-  variantId: string,
-  isoDate: string
-): Promise<void> {
-  const data = await shopifyGraphQL<SetMetafieldsResult>(shopDomain, accessToken, SET_METAFIELDS_MUTATION, {
-    metafields: [
-      { ownerId: variantId, namespace: EXPIRY_METAFIELD_NAMESPACE, key: EXPIRY_METAFIELD_KEY, type: "date", value: isoDate },
-    ],
-  });
-  const errs = data.metafieldsSet.userErrors;
-  if (errs.length > 0) throw new Error(`metafieldsSet userErrors: ${errs.map((e) => e.message).join("; ")}`);
 }

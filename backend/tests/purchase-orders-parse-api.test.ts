@@ -30,9 +30,8 @@ describe("orchestrateParse", () => {
         productVariant: {
           displayName: "ACME Milk",
           image: { url: "https://cdn.example/v1.jpg" },
-          product: { id: "gid://shopify/Product/1", title: "ACME Milk", featuredImage: null },
+          product: { id: "gid://shopify/Product/1", title: "ACME Milk", featuredImage: null, descriptionHtml: "" },
           inventoryItem: { id: "gid://shopify/InventoryItem/1", inventoryLevels: { edges: [{ node: { location: { id: "gid://shopify/Location/1" }, quantities: [{ name: "available", quantity: 2 }] } }] } },
-          metafield: null,
         },
       },
     }); // getVariantState
@@ -46,7 +45,7 @@ describe("orchestrateParse", () => {
     expect(result.lines[0].match).toMatchObject({
       variantId: "gid://shopify/ProductVariant/1",
       matchSource: "sku",
-      currentExpiryDate: null,
+      currentBbd: { kind: "absent" },
       stockByLocation: [{ locationId: "gid://shopify/Location/1", available: 2 }],
       productId: "gid://shopify/Product/1",
       imageUrl: "https://cdn.example/v1.jpg",
@@ -63,9 +62,11 @@ describe("orchestrateParse", () => {
         productVariant: {
           displayName: "ACME Milk",
           image: null,
-          product: { id: "gid://shopify/Product/9", title: "ACME Milk", featuredImage: null },
+          product: {
+            id: "gid://shopify/Product/9", title: "ACME Milk", featuredImage: null,
+            descriptionHtml: "<p><strong>Best Before Date (BBD) From: Jan 2027</strong></p>",
+          },
           inventoryItem: { id: "gid://shopify/InventoryItem/1", inventoryLevels: { edges: [] } },
-          metafield: { value: "2027-01-01" },
         },
       },
     }); // getVariantState for the mapped variant
@@ -89,9 +90,8 @@ describe("orchestrateParse", () => {
         productVariant: {
           displayName: "ACME FULL CREAM MILK 12X1L",
           image: null,
-          product: { id: "gid://shopify/Product/7", title: "ACME FULL CREAM MILK", featuredImage: null },
+          product: { id: "gid://shopify/Product/7", title: "ACME FULL CREAM MILK", featuredImage: null, descriptionHtml: "" },
           inventoryItem: { id: "gid://shopify/InventoryItem/7", inventoryLevels: { edges: [] } },
-          metafield: null,
         },
       },
     }); // getVariantState

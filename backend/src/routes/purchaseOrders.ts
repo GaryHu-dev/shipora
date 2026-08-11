@@ -11,8 +11,10 @@ import { listActiveLocations, getVariantState } from "../shopify/inventory";
 import { upsertMaterialCodeMap } from "../db/materialCodeMap";
 import { adjustInventory } from "../shopify/inventory";
 import { createImport, type NewImportLine, listImports, getImportByIdForShop, listImportLines } from "../db/purchaseOrderImports";
+import { addTrackedProduct } from "../db/trackedProducts";
 import { putPhoto, getPhoto } from "../r2";
 import { newId } from "../ids";
+import type { BbdState } from "../bbd";
 
 export const purchaseOrderRoutes = new Hono<{ Bindings: Env; Variables: AdminVars }>();
 
@@ -31,7 +33,7 @@ export interface ParseResponseLine {
     imageUrl: string | null;
     sku: string | null;
     matchSource: "sku" | "mapping" | "fuzzy";
-    currentExpiryDate: string | null;
+    currentBbd: BbdState;
     stockByLocation: { locationId: string; available: number }[];
   } | null;
 }
@@ -79,7 +81,7 @@ async function matchLine(
     imageUrl: state.imageUrl,
     sku: matched.sku,
     matchSource: matched.matchSource,
-    currentExpiryDate: state.expiryDate,
+    currentBbd: state.currentBbd,
     stockByLocation: state.stockByLocation,
   };
 }
@@ -169,10 +171,11 @@ async function processConfirmLine(
 
   let before: number | null = null;
   let adjusted = false;
-  // Expiry-date write-back is disabled for now — stock only. To re-enable, write
-  // the `shipora.expiry_date` metafield here (only when before === 0) with
-  // setExpiryDateMetafield(shop.shop_domain, shop.access_token, line.variantId,
-  // parseSled(line.sled)) and set expiryUpdated = true.
+  // BBD is never written automatically. The merchant reviews Best Before Dates
+  // monthly by hand, so auto-writing would gain a few weeks of freshness while
+  // being the only place StockProof edits the public storefront without the
+  // merchant confirming that specific change. The delivery note's date is shown
+  // on the review screen as a prompt for the next monthly pass instead.
   const expiryUpdated = false;
 
   try {
@@ -189,6 +192,14 @@ async function processConfirmLine(
         shopifyVariantId: line.variantId, updatedAt: Math.floor(Date.now() / 1000),
       });
     }
+
+    await addTrackedProduct(db, {
+      id: newId("tp"),
+      shopId,
+      shopifyVariantId: line.variantId,
+      shopifyProductId: state.productId,
+      addedAt: Math.floor(Date.now() / 1000),
+    });
 
     return {
       line: {

@@ -4,6 +4,7 @@ import { app } from "../src/index";
 import { SHOPIFY_API_VERSION } from "../src/shopify/graphql";
 import { getVariantIdForMaterialCode } from "../src/db/materialCodeMap";
 import { listImportLines } from "../src/db/purchaseOrderImports";
+import { listTrackedProducts } from "../src/db/trackedProducts";
 
 beforeAll(() => {
   fetchMock.activate();
@@ -52,10 +53,10 @@ function pdfFile(): File {
 describe("POST /admin/api/purchase-orders/confirm", () => {
   it("adjusts inventory additively (stock only, no expiry write) and records history", async () => {
     // Expiry-date write-back is disabled for now — confirm only adjusts stock.
-    mockGraphQL({ data: { productVariant: { displayName: "Product", image: null, product: { id: "gid://shopify/Product/1", featuredImage: null }, inventoryItem: { id: "gid://shopify/InventoryItem/1", inventoryLevels: { edges: [{ node: { location: { id: "gid://shopify/Location/1" }, quantities: [{ name: "available", quantity: 0 }] } }] } }, metafield: null } } }); // getVariantState for line A
+    mockGraphQL({ data: { productVariant: { displayName: "Product", image: null, product: { id: "gid://shopify/Product/1", title: "Product", featuredImage: null, descriptionHtml: "" }, inventoryItem: { id: "gid://shopify/InventoryItem/1", inventoryLevels: { edges: [{ node: { location: { id: "gid://shopify/Location/1" }, quantities: [{ name: "available", quantity: 0 }] } }] } } } } }); // getVariantState for line A
     mockGraphQL({ data: { inventoryAdjustQuantities: { userErrors: [] } } }); // adjustInventory line A
 
-    mockGraphQL({ data: { productVariant: { displayName: "Product", image: null, product: { id: "gid://shopify/Product/1", featuredImage: null }, inventoryItem: { id: "gid://shopify/InventoryItem/2", inventoryLevels: { edges: [{ node: { location: { id: "gid://shopify/Location/1" }, quantities: [{ name: "available", quantity: 5 }] } }] } }, metafield: { value: "2026-01-01" } } } }); // getVariantState for line B
+    mockGraphQL({ data: { productVariant: { displayName: "Product", image: null, product: { id: "gid://shopify/Product/1", title: "Product", featuredImage: null, descriptionHtml: "<p><strong>Best Before Date (BBD) From: Jan 2026</strong></p>" }, inventoryItem: { id: "gid://shopify/InventoryItem/2", inventoryLevels: { edges: [{ node: { location: { id: "gid://shopify/Location/1" }, quantities: [{ name: "available", quantity: 5 }] } }] } } } } }); // getVariantState for line B
     mockGraphQL({ data: { inventoryAdjustQuantities: { userErrors: [] } } }); // adjustInventory line B
 
     const lines = [
@@ -121,7 +122,7 @@ describe("POST /admin/api/purchase-orders/confirm", () => {
   });
 
   it("upserts the material_code_map for a fuzzy/manual match but not for an exact SKU match", async () => {
-    mockGraphQL({ data: { productVariant: { displayName: "Product", image: null, product: { id: "gid://shopify/Product/1", featuredImage: null }, inventoryItem: { id: "gid://shopify/InventoryItem/1", inventoryLevels: { edges: [] } }, metafield: null } } });
+    mockGraphQL({ data: { productVariant: { displayName: "Product", image: null, product: { id: "gid://shopify/Product/1", title: "Product", featuredImage: null, descriptionHtml: "" }, inventoryItem: { id: "gid://shopify/InventoryItem/1", inventoryLevels: { edges: [] } } } } });
     mockGraphQL({ data: { inventoryAdjustQuantities: { userErrors: [] } } });
 
     const lines = [
@@ -134,5 +135,45 @@ describe("POST /admin/api/purchase-orders/confirm", () => {
 
     await app.request("/admin/api/purchase-orders/confirm", { method: "POST", body: fd, headers: await authHeaders() }, env);
     expect(await getVariantIdForMaterialCode(env.DB, "shop_1", "500123")).toBe("gid://shopify/ProductVariant/1");
+  });
+
+  it("adds every product it stocked to the Stock tab", async () => {
+    // Deliveries should grow the tracked list by themselves — the merchant
+    // should never have to remember to add what they just received.
+    mockGraphQL({ data: { productVariant: {
+      displayName: "Product", image: null,
+      product: { id: "gid://shopify/Product/1", title: "Product", featuredImage: null, descriptionHtml: "" },
+      inventoryItem: { id: "gid://shopify/InventoryItem/1", inventoryLevels: { edges: [
+        { node: { location: { id: "gid://shopify/Location/1" }, quantities: [{ name: "available", quantity: 0 }] } },
+      ] } },
+    } } });
+    mockGraphQL({ data: { inventoryAdjustQuantities: { userErrors: [] } } });
+
+    const lines = [
+      { materialCode: "122352", description: "ANC BTR", deliveredQty: 5, sled: "22.11.2027", variantId: "gid://shopify/ProductVariant/1", matchSource: "sku", skip: false },
+    ];
+    const fd = new FormData();
+    fd.set("pdf", pdfFile());
+    fd.set("locationId", "gid://shopify/Location/1");
+    fd.set("lines", JSON.stringify(lines));
+
+    const res = await app.request("/admin/api/purchase-orders/confirm", { method: "POST", body: fd, headers: await authHeaders() }, env);
+    expect(res.status).toBe(200);
+
+    const tracked = await listTrackedProducts(env.DB, "shop_1");
+    expect(tracked.map((t) => t.shopifyVariantId)).toEqual(["gid://shopify/ProductVariant/1"]);
+  });
+
+  it("does not track a skipped line", async () => {
+    const lines = [
+      { materialCode: "999", description: "UNMATCHED", deliveredQty: 3, sled: "01.01.2028", variantId: null, matchSource: null, skip: true },
+    ];
+    const fd = new FormData();
+    fd.set("pdf", pdfFile());
+    fd.set("locationId", "gid://shopify/Location/1");
+    fd.set("lines", JSON.stringify(lines));
+
+    await app.request("/admin/api/purchase-orders/confirm", { method: "POST", body: fd, headers: await authHeaders() }, env);
+    expect(await listTrackedProducts(env.DB, "shop_1")).toEqual([]);
   });
 });
