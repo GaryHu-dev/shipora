@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import "./InstallPrompt.css";
 
-const DISMISS_KEY = "shipora_install_dismissed";
-export const SHOW_INSTALL_EVENT = "shipora:show-install";
+const DISMISS_KEY = "stockproof_install_dismissed";
+export const SHOW_INSTALL_EVENT = "stockproof:show-install";
 
 export function isStandalone(): boolean {
   const mm = window.matchMedia?.("(display-mode: standalone)")?.matches;

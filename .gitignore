@@ -5,3 +5,7 @@ dist/
 *.log
 .DS_Store
 *.tsbuildinfo
+# D1 dumps contain live Shopify access tokens and the shops' join secrets —
+# never commit them, and delete them once a migration is finished.
+.migration/
+.claude/worktrees/

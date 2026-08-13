@@ -1,0 +1,28 @@
+<!--
+  StockProof icon, Android maskable variant.
+
+  Android crops a maskable icon to whatever shape the launcher uses — circle,
+  squircle, teardrop — and only the central 80%-diameter circle is guaranteed
+  to survive. The main artwork is scaled 1.32 and would lose its corners here,
+  so this one is scaled 0.92 instead: that puts the carton's furthest corner at
+  ~373 from centre, inside the 409 safe radius, with a little room to spare.
+
+  The previous manifest declared the SAME file for both the "any" and
+  "maskable" purposes, which is why the icon was being cropped on Android. Keep
+  these two files distinct.
+
+  Geometry and colour otherwise identical to stockproof-icon.svg — change both
+  together. Seams stay at 22 here because this variant is close to 1:1.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <rect width="1024" height="1024" fill="#FFFFFF"/>
+  <g transform="translate(512 512) scale(0.92) translate(-512 -520)">
+    <g stroke="#FFFFFF" stroke-width="22" stroke-linejoin="round">
+      <path d="M512 218 L774 369 L512 520 L250 369 Z" fill="#4285F4"/>
+      <path d="M250 369 L512 520 L512 822 L250 671 Z" fill="#34A853"/>
+      <path d="M774 369 L774 671 L512 822 L512 520 Z" fill="#FBBC05"/>
+    </g>
+    <path d="M316 534 L365 629 L475 547" stroke="#FFFFFF" stroke-width="50"
+          fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

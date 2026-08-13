@@ -1,7 +1,7 @@
 # StockProof app config — pushed to Shopify via: shopify app deploy
 client_id = "3232436b8e6157913cd02a1dc06a1e9a"
 name = "StockProof"
-application_url = "https://shipora-backend.gary-hushek.workers.dev/admin"
+application_url = "https://stockproof-backend.dms-259.workers.dev/admin"
 embedded = true
 
 [access_scopes]
@@ -9,7 +9,7 @@ scopes = "read_orders,write_orders,read_products,write_products,read_inventory,w
 
 [auth]
 redirect_urls = [
-  "https://shipora-backend.gary-hushek.workers.dev/auth/callback"
+  "https://stockproof-backend.dms-259.workers.dev/auth/callback"
 ]
 
 [webhooks]

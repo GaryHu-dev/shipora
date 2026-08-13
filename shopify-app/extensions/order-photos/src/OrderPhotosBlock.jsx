@@ -12,7 +12,13 @@ import {
 import { useEffect, useState } from "react";
 
 const TARGET = "admin.order-details.block.render";
-const BACKEND = "https://shipora-backend.gary-hushek.workers.dev";
+// Hardcoded because a Shopify UI extension has no access to the Worker's vars —
+// it is bundled and served by Shopify, not by us. That makes this line a
+// migration hazard: it does not move when APP_URL does, and nothing fails at
+// build time if it goes stale. It was left pointing at a decommissioned Worker
+// once already. If the backend host changes, change it HERE and redeploy the
+// extension (`shopify app deploy`), not just wrangler.jsonc.
+const BACKEND = "https://stockproof-backend.dms-259.workers.dev";
 const CAT = {
   shipping_photo: "Shipping photo",
   packing_slip: "Packing slip",
@@ -53,7 +59,7 @@ function OrderPhotos() {
   }, [orderGid]);
 
   return (
-    <AdminBlock title="Shipora">
+    <AdminBlock title="StockProof">
       {photos === null ? (
         <Text>Loading…</Text>
       ) : photos.length === 0 ? (

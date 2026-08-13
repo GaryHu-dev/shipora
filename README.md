@@ -19,10 +19,11 @@ Shopify store; multi-tenant (one deployment serves many shops, each isolated).
    original PDF plus a line-by-line diff — under the **History** tab, PDF downloadable.
 
 > Expiry dates (`SLED`/BBD) are parsed from the delivery note and shown for review, but
-> **not written back to Shopify for now** — confirm updates stock only. The write-back path
-> (a `shipora.expiry_date` variant metafield, overwritten only when the variant's stock was
-> 0) is in place and easy to re-enable; see `processConfirmLine` in
-> `backend/src/routes/purchaseOrders.ts`.
+> **never written back** — confirm updates stock only. The merchant reviews Best Before Dates
+> by hand each month, so auto-writing would buy a few weeks of freshness while being the one
+> place the app edits the public storefront without the merchant confirming that specific
+> change. The earlier variant-metafield write-back path has been removed rather than left
+> dormant. BBD lives in the product **description**, not a metafield — see `backend/src/bbd.ts`.
 
 **Goods out — proof of shipment** (warehouse staff, on their phone)
 
@@ -44,9 +45,18 @@ Shopify store; multi-tenant (one deployment serves many shops, each isolated).
 **Shopify admin** (embedded page, served by the backend at `/admin`)
 - **Photos** tab: join QR + **Reset code** (revoke leaked links per-shop), photo retention
   (configurable days) + one-click cleanup, **Recent photos** with order-number search.
+- **Stock** tab: a merchant-curated product list for the weekly count. Stock is read **live**
+  from Shopify on every load — nothing is cached, so the number shown can never drift from
+  Shopify. Rows are read-only until opened; edit one or bulk-edit the lot, confirm each with
+  ✓ (or Enter, which confirms and drops to the next row), then a dialog itemises every change
+  before anything is written. Writes carry `compareQuantity`, so a sale landing between page
+  load and save is **rejected rather than silently erased**. Per-row "last counted" plus a
+  *Not counted this week* filter answer "what's left?" mid-count. Best Before Dates are parsed
+  out of each product's description and shown; editing them is a later stage.
 - **Import** tab: upload a supplier delivery-note PDF → parsed, matched (with product
-  thumbnails, editable per line), previewed (current → resulting stock) → confirm to add the
-  delivered quantities to Shopify stock.
+  thumbnails, editable per line), previewed (current → resulting stock) → a confirmation
+  dialog that **leads with the lines that will be skipped** → confirm to add the delivered
+  quantities to Shopify stock. Imported products join the Stock tab automatically.
 - **History** tab: every past import with per-line results; download the original PDF.
 - Order-details **block extension** (`shopify-app/`): lists an order's photos with
   category badges + View links.
@@ -76,20 +86,19 @@ Shopify store; multi-tenant (one deployment serves many shops, each isolated).
 ## Repo structure
 
 ```
-shipora/
+stockproof/
 ├── backend/      Cloudflare Worker (Hono): OAuth, order sync, webhooks, photo store,
-│                 purchase-order import (parse → match → add stock), admin page
+│                 purchase-order import (parse → match → add stock), stock list, admin page
 │                 → D1 (metadata) + R2 (photo & PDF bytes). See backend/README.md
 ├── pwa/          Mobile PWA (Vite + React): join, orders, capture/rotate/upload, settings
 │                 → deploy to Cloudflare Pages. See pwa/README.md
 ├── shopify-app/  Shopify CLI app: the order-details block extension (deployed via CLI)
-└── docs/         Design specs & implementation plans (working notes, untracked)
+└── docs/         Design specs, implementation plans, runbooks (working notes, untracked)
 ```
 
-The Shopify-embedded admin page (Photos / Import / History) is served by the backend
-Worker at `/admin`. (The repo directory, Worker, D1 database, R2 bucket, and Pages project
-still carry their original `shipora*` names — renaming those is infrastructure, separate
-from the product's display name.)
+The Shopify-embedded admin page (Photos / Stock / Import / History) is served by the backend
+Worker at `/admin`. The local repo directory may still be named `shipora`; every other name —
+Worker, D1 database, R2 bucket, Pages project, GitHub repo — is `stockproof*`.
 
 ## Quick start (local)
 
@@ -98,7 +107,7 @@ from the product's display name.)
 cd backend
 npm install
 cp .dev.vars.example .dev.vars     # fill in local secrets
-npm test                           # 134 tests, no live Shopify needed
+npm test                           # 185 tests, no live Shopify needed
 npm run dev                        # esbuild build → wrangler dev (see backend/build.mjs)
 
 # PWA — http://localhost:5173  (VITE_API_BASE points at the backend)
@@ -120,16 +129,16 @@ credentials.
 # 1) Backend — Cloudflare Worker (created on first deploy, named per wrangler.jsonc)
 cd backend && npm install
 npx wrangler login
-npx wrangler d1 create shipora                       # copy database_id → wrangler.jsonc
-npx wrangler r2 bucket create shipora-photos
-npx wrangler d1 migrations apply shipora --remote
+npx wrangler d1 create stockproof                       # copy database_id → wrangler.jsonc
+npx wrangler r2 bucket create stockproof-photos
+npx wrangler d1 migrations apply stockproof --remote
 npx wrangler secret put APP_SECRET                   # + SHOPIFY_API_SECRET, SHOPIFY_API_KEY, ADMIN_KEY
 npm run deploy                                        # esbuild build + wrangler deploy; prints your Worker URL
 
 # 2) PWA — Cloudflare Pages
 cd ../pwa && npm install
 VITE_API_BASE=https://<worker-url> npm run build
-npx wrangler pages deploy dist --project-name=shipora-pwa
+npx wrangler pages deploy dist --project-name=stockproof-pwa
 #   then set the backend var PWA_URL to the Pages URL and re-run `npm run deploy` in backend/
 
 # 3) Order-page block (optional) — Shopify

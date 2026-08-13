@@ -17,7 +17,7 @@ describe("session storage", () => {
     expect(getSession()).toBeNull();
   });
   it("returns null on corrupt data", () => {
-    localStorage.setItem("shipora_session", "not json");
+    localStorage.setItem("stockproof_session", "not json");
     expect(getSession()).toBeNull();
   });
 });
