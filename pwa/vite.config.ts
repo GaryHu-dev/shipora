@@ -1,12 +1,24 @@
 /// <reference types="vitest" />
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 
-export default defineConfig({
-  plugins: [
-    react(),
-    VitePWA({
+export default defineConfig(({ command, mode }) => {
+  // VITE_API_BASE is inlined at build time. Without it the app calls its own
+  // origin, Cloudflare Pages answers POST /api/... with 405, and the failure
+  // shows up as "scanning the join QR is broken" — nowhere near the build step
+  // that caused it. Refuse to produce that artifact at all.
+  if (command === "build" && mode !== "test" && !loadEnv(mode, process.cwd(), "VITE_").VITE_API_BASE) {
+    throw new Error(
+      "VITE_API_BASE is not set. A production build without it silently ships a " +
+        "PWA that cannot reach the backend. Set it in pwa/.env.production."
+    );
+  }
+
+  return {
+    plugins: [
+      react(),
+      VitePWA({
       registerType: "autoUpdate",
       injectRegister: false,
       includeAssets: ["apple-touch-icon.png"],
@@ -31,12 +43,13 @@ export default defineConfig({
           { src: "icon-512-maskable.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
         ],
       },
-    }),
-  ],
-  test: {
-    environment: "jsdom",
-    environmentOptions: { jsdom: { url: "http://localhost" } },
-    globals: true,
-    setupFiles: ["./tests/setup.ts"],
-  },
+      }),
+    ],
+    test: {
+      environment: "jsdom",
+      environmentOptions: { jsdom: { url: "http://localhost" } },
+      globals: true,
+      setupFiles: ["./tests/setup.ts"],
+    },
+  };
 });

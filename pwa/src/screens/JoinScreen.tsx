@@ -41,7 +41,7 @@ export default function JoinScreen({ joinToken, onJoined }: { joinToken: string 
   if (!token) {
     return (
       <div className="join">
-        <div className="logo"><span className="box" /></div>
+        <img className="logo" src="/icon-192.png" alt="" width={64} height={64} />
         <h1>Join your team</h1>
         <p className="sub">Scan the QR code from your manager to get started.</p>
         <button type="button" className="btn" onClick={() => { setError(null); setScanning(true); }}>Scan QR code</button>
@@ -63,7 +63,7 @@ export default function JoinScreen({ joinToken, onJoined }: { joinToken: string 
 
   return (
     <form className="join" onSubmit={submit}>
-      <div className="logo"><span className="box" /></div>
+      <img className="logo" src="/icon-192.png" alt="" width={64} height={64} />
       <h1>Almost there</h1>
       <p className="sub">Add your name so each photo is logged to you.</p>
       <label htmlFor="name">Your name</label>

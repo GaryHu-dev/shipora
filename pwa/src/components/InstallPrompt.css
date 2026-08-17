@@ -1,13 +1,18 @@
 .install {
-  position: fixed; left: 12px; right: 12px; bottom: calc(12px + var(--safe-bottom)); z-index: 50;
+  position: fixed; left: 12px; right: 12px; z-index: 60;
+  /* Rides above the order screen's fixed capture bar instead of covering it.
+     --capture-bar-h is 0 everywhere else, so other screens are unaffected. */
+  bottom: calc(12px + var(--safe-bottom) + var(--capture-bar-h, 0px));
   display: flex; align-items: center; gap: 10px;
   padding: 12px 14px; background: #111827; color: #fff; border-radius: 14px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28); font-size: 13.5px; line-height: 1.35;
   animation: install-in 0.25s ease;
 }
 @keyframes install-in { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-.install .ic { width: 34px; height: 34px; border-radius: 8px; background: #fff; flex: none; position: relative; }
-.install .ic::after { content: ""; position: absolute; inset: 8px; background: #111827; border-radius: 4px; }
+/* The real icon. This banner asks someone to put StockProof on their home
+   screen; showing them a placeholder square instead of the thing they are
+   about to install is the wrong moment to be vague. */
+.install .ic { width: 34px; height: 34px; border-radius: 8px; flex: none; display: block; }
 .install .txt { flex: 1; }
 .install b { font-weight: 700; }
 .install .add { flex: none; background: #2563eb; color: #fff; border: none; border-radius: 9px; padding: 8px 14px; font-weight: 600; font-size: 14px; }
