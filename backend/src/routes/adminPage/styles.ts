@@ -5,14 +5,22 @@
 // string too rather than as a separate asset the Worker would have to route.
 export const ADMIN_STYLES = `
 <style>
+  /* Tuned to the current Shopify admin rather than the palette Polaris used a
+     few years ago. This page renders inside their frame, so anything off — the
+     grey, the ink, the shape of a button — reads as a bolt-on.
+     The loudest tell was the primary button: Shopify's is near-black now, and
+     a blue one is recognisable as not-theirs at a glance to anyone who works
+     in that admin all day. Blue stays, but only where it still belongs —
+     links, focus, selection. */
   :root {
-    --bg:#f1f2f4; --surface:#fff; --text:#202223; --subdued:#6d7175; --border:#e1e3e5;
-    --accent:#2c6ecb; --accent-press:#1f5199;
+    --bg:#f1f1f1; --surface:#fff; --text:#303030; --subdued:#616161; --border:#e3e3e3;
+    --accent:#005bd3; --accent-press:#004299;
+    --primary-bg:#303030; --primary-bg-press:#1a1a1a;
     --amber-bg:#fff1d6; --amber-fg:#8a6116; --green-bg:#e3f1df; --green-fg:#0f5132;
     --radius:12px; --shadow:0 1px 2px rgba(0,0,0,.05), 0 0 1px rgba(0,0,0,.08);
   }
   * { box-sizing:border-box; }
-  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  body { font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
     margin:0; padding:20px 16px 40px; color:var(--text); background:var(--bg); -webkit-font-smoothing:antialiased; }
   .wrap { max-width:720px; margin:0 auto; }
   .page-h { font-size:20px; font-weight:650; margin:0 0 4px; }
@@ -29,8 +37,8 @@ export const ADMIN_STYLES = `
   .row-btns { display:flex; gap:8px; flex-wrap:wrap; }
   .reset-note { color:var(--subdued); font-size:12px; margin-top:8px; }
   .btn { padding:9px 14px; font-size:13.5px; font-weight:600; border-radius:8px; border:1px solid var(--border); background:#fff; color:var(--text); cursor:pointer; }
-  .btn.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
-  .btn.primary:active { background:var(--accent-press); }
+  .btn.primary { background:var(--primary-bg); color:#fff; border-color:var(--primary-bg); }
+  .btn.primary:active { background:var(--primary-bg-press); border-color:var(--primary-bg-press); }
 
   .layout { display:grid; grid-template-columns:1fr 300px; gap:16px; align-items:start; }
   @media (max-width:820px){ .layout { grid-template-columns:1fr; } }
@@ -166,8 +174,23 @@ export const ADMIN_STYLES = `
 
   /* ---- Stock tab ---- */
   .stock-toolbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:12px; }
+  /* The selects were unstyled, so they rendered as raw OS controls sitting in
+     the middle of a page that otherwise matches the Shopify admin — the one
+     element that gave away that this is not a native screen. */
+  .stock-toolbar label { display:inline-flex; align-items:center; gap:6px;
+    font-size:12.5px; font-weight:600; color:var(--subdued); }
+  .stock-toolbar select {
+    appearance:none; -webkit-appearance:none;
+    padding:7px 30px 7px 10px; font:inherit; font-size:13.5px; font-weight:500; color:var(--text);
+    background-color:#fff; border:1px solid var(--border); border-radius:8px; cursor:pointer;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23616161' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+    background-repeat:no-repeat; background-position:right 8px center;
+  }
+  .stock-toolbar select:hover { background-color:#fafafa; }
+  .stock-toolbar select:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 2px rgba(0,91,211,.16); }
   .stock-add { position:relative; flex:1; min-width:220px; }
-  .stock-add input { width:100%; padding:7px 10px; border:1px solid var(--border); border-radius:6px; font-size:13.5px; }
+  .stock-add input { width:100%; padding:7px 10px; border:1px solid var(--border); border-radius:8px; font-size:13.5px; }
+  .stock-add input:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 2px rgba(0,91,211,.16); }
   .stock-filters { display:flex; gap:6px; margin-bottom:10px; }
   .stock-filters button { padding:5px 11px; font-size:12.5px; border:1px solid var(--border);
     background:#fff; border-radius:999px; cursor:pointer; color:var(--subdued); }
@@ -194,4 +217,36 @@ export const ADMIN_STYLES = `
   .modal .m-sec.warn h4 { color:#b45309; }
   .modal .m-sec ul { margin:0; padding-left:18px; font-size:13px; line-height:1.65; }
   .modal .m-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; }
+  .back-to-stock { width: auto; padding: 7px 13px; font-size: 13.5px; font-weight: 600;
+    color: var(--text); background: #fff; border: 1px solid var(--border); margin-bottom: 12px; }
+  .back-to-stock:hover { background: #f6f7f9; }
+  .sync-warn { display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+    background:#fff1d6; border:1px solid #e0c48a; border-radius:10px;
+    padding:11px 14px; margin-bottom:16px; font-size:13.5px; color:#8a6116; }
+  .sync-warn .btn { flex:none; }
+  .map-add { display:flex; gap:8px; align-items:flex-start; flex-wrap:wrap; margin-bottom:10px; }
+  .map-add .map-code { width:160px; padding:7px 10px; border:1px solid var(--border); border-radius:8px; font-size:13.5px; }
+  .map-add .map-prod { flex:1; min-width:220px; }
+  .map-chosen { font-size:13px; color:var(--subdued); margin-bottom:10px; }
+  .map-chosen b { color:var(--text); }
+  .map-list { display:flex; flex-direction:column; gap:6px; }
+  .map-row { display:flex; align-items:center; gap:10px; padding:8px 10px; border:1px solid var(--border); border-radius:8px; background:#fff; }
+  .map-row .code { font-weight:700; font-variant-numeric:tabular-nums; min-width:90px; }
+  .map-row .arrow { color:var(--subdued); }
+  .map-row img, .map-row .noimg { width:32px; height:32px; border-radius:6px; object-fit:cover; background:#f1f2f4; flex:none; }
+  .map-row .who { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13.5px; }
+  .map-row .gone { color:#b42318; font-size:12.5px; font-weight:600; }
+  .map-row .rm { flex:none; padding:5px 10px; font-size:12.5px; }
+  .map-empty { color:var(--subdued); font-size:13px; padding:6px 2px; }
+  /* Scoped to the stock list, not to .po-table generally: the import review
+     table shares that class and its cells hold inputs and dropdowns, which need
+     the taller row. Here a row is a name, a number and two small buttons, and
+     the point of the screen is to run your eye down dozens of them — every
+     pixel of row height is a row you cannot see at once. */
+  #stockTable td { padding:6px 10px; vertical-align:middle; }
+  #stockTable .po-prod-title { line-height:1.25; }
+  #stockTable .po-code { margin-top:0; line-height:1.2; }
+  #stockTable .btn { padding:5px 10px; font-size:12.5px; }
+  #stockTable .stock-qty button { height:24px; }
+  #stockTable .stock-qty input { padding:4px 6px; }
 </style>`;

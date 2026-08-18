@@ -38,16 +38,30 @@ stockRoutes.get("/admin/api/stock", requireAdminSession(), async (c) => {
 });
 
 stockRoutes.post("/admin/api/stock/items", requireAdminSession(), async (c) => {
+  const shopId = c.get("shopId");
+  const shop = await getShopById(c.env.DB, shopId);
+  if (!shop) return c.json({ error: "shop not found" }, 404);
+
   const body = await c.req
-    .json<{ variantId?: string; productId?: string }>()
-    .catch(() => ({}) as { variantId?: string; productId?: string });
-  if (!body.variantId || !body.productId) return c.json({ error: "variantId and productId required" }, 400);
+    .json<{ variantId?: string }>()
+    .catch(() => ({}) as { variantId?: string });
+  if (!body.variantId) return c.json({ error: "variantId required" }, 400);
+
+  // The product id comes from Shopify, not from the caller. It used to be
+  // taken on trust from the request body, which was harmless only because
+  // nothing read it back: the list renders the product from a live read. Stage
+  // 2 writes the Best Before Date to the *product*, so a wrong id there would
+  // edit some other product's description — a silent, public mistake. Looking
+  // it up also rejects a variant that does not exist at all.
+  const live = await fetchStockRows(shop.shop_domain, shop.access_token, [body.variantId]);
+  const row = live.get(body.variantId);
+  if (!row) return c.json({ error: "no such product in this shop" }, 404);
 
   await addTrackedProduct(c.env.DB, {
     id: newId("tp"),
-    shopId: c.get("shopId"),
-    shopifyVariantId: body.variantId,
-    shopifyProductId: body.productId,
+    shopId,
+    shopifyVariantId: row.variantId,
+    shopifyProductId: row.productId,
     addedAt: Math.floor(Date.now() / 1000),
   });
   return c.json({ ok: true });

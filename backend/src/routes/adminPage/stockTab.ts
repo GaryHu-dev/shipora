@@ -8,7 +8,7 @@
 
 export function stockTabMarkup(): string {
   return `
-  <div id="tab-stock" class="tab-pane">
+  <div id="tab-stock" class="tab-pane active">
   <div class="card">
     <h2>Stock</h2>
     <p class="desc">The products you track, with live stock from Shopify. Count weekly: open a row, enter what you counted, then save. Best Before Dates are read from each product's description (editing them comes later).</p>
@@ -20,6 +20,7 @@ export function stockTabMarkup(): string {
       <label id="stockLocationWrap" style="display:none">Location
         <select id="stockLocation"></select>
       </label>
+      <button class="btn" id="stockImportBtn" type="button">Import delivery note</button>
       <label>Sort
         <select id="stockSort">
           <option value="name">Name</option>
@@ -597,17 +598,24 @@ export function stockTabScript(): string {
 
       data.variants.slice(0, 8).forEach(function (v) {
         var a = document.createElement("a"); a.href = "#";
+        // Thumbnail, as the import picker has had all along. Titles here are
+        // long and near-identical — "Anchor Butter Salted 24X454G" against
+        // "Anchor Butter Unsalted 24X454G" — and the picture is what tells
+        // them apart at a glance. This list was the one that went without.
+        var th;
+        if (v.imageUrl) { th = document.createElement("img"); th.className = "pk-thumb"; th.src = v.imageUrl; th.alt = ""; }
+        else { th = document.createElement("div"); th.className = "pk-thumb"; th.textContent = "\u25A6"; }
         var meta = document.createElement("div");
         var t = document.createElement("div"); t.className = "pk-title"; t.textContent = v.title;
         var s = document.createElement("div"); s.className = "pk-sku"; s.textContent = v.sku ? "SKU " + v.sku : "No SKU";
-        meta.appendChild(t); meta.appendChild(s); a.appendChild(meta);
+        meta.appendChild(t); meta.appendChild(s); a.appendChild(th); a.appendChild(meta);
         a.addEventListener("click", async function (ev) {
           ev.preventDefault();
           try {
             await api("/admin/api/stock/items", {
               method: "POST",
               headers: { "content-type": "application/json" },
-              body: JSON.stringify({ variantId: v.id, productId: v.productId }),
+              body: JSON.stringify({ variantId: v.id }),
             });
           } catch (err) {
             stockAddError("Couldn't add that product — check your connection and try again.");

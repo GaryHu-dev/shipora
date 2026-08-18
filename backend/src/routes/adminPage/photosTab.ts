@@ -2,7 +2,7 @@
 
 export function photosTabMarkup(): string {
   return `
-  <div id="tab-photos" class="tab-pane active">
+  <div id="tab-photos" class="tab-pane">
   <div class="layout">
   <div class="main">
   <div class="card">

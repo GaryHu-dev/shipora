@@ -100,17 +100,35 @@ describe("GET /admin/api/stock", () => {
 });
 
 describe("POST /admin/api/stock/items", () => {
-  it("adds a product and is idempotent", async () => {
-    const post = async () =>
-      app.request("/admin/api/stock/items", {
-        method: "POST",
-        headers: { ...(await authHeaders()), "content-type": "application/json" },
-        body: JSON.stringify({ variantId: V1, productId: P1 }),
-      }, env);
+  async function post(extra = {}) {
+    return app.request("/admin/api/stock/items", {
+      method: "POST",
+      headers: { ...(await authHeaders()), "content-type": "application/json" },
+      body: JSON.stringify({ variantId: V1, ...extra }),
+    }, env);
+  }
 
+  it("adds a product and is idempotent", async () => {
+    mockGraphQL({ data: { nodes: [variantNode(12, "")] } });
     expect((await post()).status).toBe(200);
+    mockGraphQL({ data: { nodes: [variantNode(12, "")] } });
     expect((await post()).status).toBe(200);
     expect(await listTrackedProducts(env.DB, "shop_1")).toHaveLength(1);
+  });
+
+  it("stores the product id Shopify reports, not one the caller supplied", async () => {
+    // Stage 2 writes the Best Before Date to the product, so a wrong id here
+    // would edit a different product's description — publicly, and silently.
+    mockGraphQL({ data: { nodes: [variantNode(12, "")] } });
+    await post({ productId: "gid://shopify/Product/999999" });
+    const [row] = await listTrackedProducts(env.DB, "shop_1");
+    expect(row.shopifyProductId).toBe(P1);
+  });
+
+  it("refuses a variant that does not exist in this shop", async () => {
+    mockGraphQL({ data: { nodes: [null] } });
+    expect((await post()).status).toBe(404);
+    expect(await listTrackedProducts(env.DB, "shop_1")).toEqual([]);
   });
 });
 

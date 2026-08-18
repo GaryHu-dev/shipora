@@ -6,8 +6,12 @@ export function mapFulfillment(displayStatus: string): "fulfilled" | "unfulfille
   return displayStatus === "FULFILLED" ? "fulfilled" : "unfulfilled";
 }
 
-// Note: no `customer` field — that needs the `read_customers` scope. We only
-// request order-level fields (read_orders). Customer name stays null.
+// `order.customer` would need read_customers, which this app does not ask for
+// — but the name on the shipping or billing address is reachable under the
+// scopes it already has, and the order-detail screen has been reading exactly
+// that all along. This used to store null and claim the scope made it
+// impossible, which left every order that arrived by sync rather than by
+// webhook with a blank name: 268 of them, before this was noticed.
 const ORDERS_QUERY = `
 query RecentOrders($first: Int!, $query: String!) {
   orders(first: $first, sortKey: CREATED_AT, reverse: true, query: $query) {
@@ -17,6 +21,8 @@ query RecentOrders($first: Int!, $query: String!) {
         name
         createdAt
         displayFulfillmentStatus
+        shippingAddress { name }
+        billingAddress { name }
       }
     }
     pageInfo { hasNextPage }
@@ -31,6 +37,8 @@ interface OrdersResult {
         name: string;
         createdAt: string;
         displayFulfillmentStatus: string;
+        shippingAddress: { name: string | null } | null;
+        billingAddress: { name: string | null } | null;
       };
     }[];
     pageInfo: { hasNextPage: boolean };
@@ -56,7 +64,7 @@ export async function syncRecentOrders(
       shopId: shop.id,
       shopifyOrderId: n.id,
       orderNumber: n.name,
-      customerName: null,
+      customerName: n.shippingAddress?.name ?? n.billingAddress?.name ?? null,
       fulfillmentStatus: mapFulfillment(n.displayFulfillmentStatus),
       createdAt: Math.floor(Date.parse(n.createdAt) / 1000),
       syncedAt: nowSeconds,

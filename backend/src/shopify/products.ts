@@ -132,11 +132,26 @@ export async function searchVariantsByQuery(
   accessToken: string,
   text: string
 ): Promise<VariantCandidate[]> {
-  const cleaned = text.replace(/[:()"*\\-]/g, " ").replace(/\s+/g, " ").trim();
+  // Hyphens are kept inside a word — SKUs are full of them, and stripping them
+  // split "ANC-122352" into two terms that then matched nothing useful. Only a
+  // leading or trailing hyphen is dropped, because Shopify reads that as an
+  // exclusion operator.
+  const cleaned = text.replace(/[:()"*\\]/g, " ").replace(/\s+/g, " ").trim();
   if (cleaned.length < 2) return [];
-  const terms = cleaned.split(" ").filter(Boolean).slice(0, 4);
-  const clauses = terms.map((t) => `title:${t}*`);
-  clauses.push(`sku:${terms[0]}*`);
-  const query = clauses.join(" OR ");
-  return runProductSearch(shopDomain, accessToken, query);
+  const terms = cleaned
+    .split(" ")
+    .map((t) => t.replace(/^-+|-+$/g, ""))
+    .filter(Boolean)
+    .slice(0, 4);
+  if (terms.length === 0) return [];
+
+  // Every term is tried as a title prefix AND a SKU prefix. Only the first term
+  // used to be searched as a SKU, so typing a product name followed by its code
+  // — the natural thing to do — never searched the code as a code.
+  const clauses: string[] = [];
+  for (const t of terms) {
+    clauses.push(`title:${t}*`);
+    clauses.push(`sku:${t}*`);
+  }
+  return runProductSearch(shopDomain, accessToken, clauses.join(" OR "));
 }

@@ -110,16 +110,29 @@ function renderAdminPage(apiKey: string): string {
   <h1 class="page-h">StockProof</h1>
   <p class="page-sub">Import stock from supplier delivery notes, and collect proof-of-shipment photos from your warehouse staff.</p>
 
-  <div class="tabs">
-    <button class="tab-btn active" id="tab-photos-btn" data-tab="photos">Photos</button>
-    <button class="tab-btn" id="tab-import-btn" data-tab="import">Import</button>
-    <button class="tab-btn" id="tab-history-btn" data-tab="history">History</button>
-    <button class="tab-btn" id="tab-stock-btn" data-tab="stock">Stock</button>
+  <!-- Import is not a peer of Stock: both do the same job — change what this
+       shop holds — and differ only in where the numbers come from, one counted
+       by hand and one read off a delivery note. It now opens from inside Stock.
+       History stays top-level because it is a lookup you reach for when
+       something does not add up, and burying it would be a poor trade. -->
+  <!-- Sits above the tabs because a broken sync makes everything below it
+       untrustworthy: the stock list, the order list in the PWA, all of it is
+       reading a database that stopped being fed. Hidden entirely while
+       healthy — a permanent green tick trains people to stop reading it. -->
+  <div id="syncWarn" class="sync-warn" style="display:none">
+    <span id="syncWarnText"></span>
+    <button class="btn" id="syncFixBtn" type="button">Fetch them now</button>
   </div>
-${photosTabMarkup()}
+
+  <div class="tabs">
+    <button class="tab-btn active" id="tab-stock-btn" data-tab="stock">Stock</button>
+    <button class="tab-btn" id="tab-photos-btn" data-tab="photos">Photos</button>
+    <button class="tab-btn" id="tab-history-btn" data-tab="history">History</button>
+  </div>
+${stockTabMarkup()}
 ${importTabMarkup()}
 ${historyTabMarkup()}
-${stockTabMarkup()}
+${photosTabMarkup()}
 </div>
 
 <script>
@@ -137,6 +150,71 @@ ${photosTabScript()}
 ${stockTabScript()}
 
   // Tabs
+  // Checked on load rather than on a timer: this is a page someone opens to do
+  // a job, and the moment they open it is exactly when they need to know the
+  // numbers in front of them are current.
+  (async function () {
+    try {
+      var r = await api("/admin/api/sync-health");
+      var h = await r.json();
+      if (h.unavailable || !h.missing) return;
+      document.getElementById("syncWarnText").textContent =
+        h.missing + (h.missing === 1 ? " recent order has" : " recent orders have") +
+        " not reached StockProof. Shopify's latest is " + h.shopifyNewest +
+        "; the newest here is " + (h.ourNewest || "none") + ".";
+      document.getElementById("syncWarn").style.display = "";
+    } catch (e) { /* never let a health check break the page it is reporting on */ }
+  })();
+
+  document.getElementById("syncFixBtn").addEventListener("click", async function () {
+    var btn = this; btn.disabled = true; btn.textContent = "Fetching\u2026";
+    try {
+      var r = await api("/admin/api/sync-health/resync", { method: "POST" });
+      var d = await r.json();
+      if (d.health && !d.health.missing) {
+        document.getElementById("syncWarnText").textContent = "Caught up \u2014 " + d.synced + " orders fetched" +
+          (d.repointed && d.repointed.length ? ", and " + d.repointed.length + " webhook(s) repointed here" : "") + ".";
+        btn.style.display = "none";
+        window.__stockLoaded = false;
+      } else {
+        document.getElementById("syncWarnText").textContent =
+          "Fetched " + d.synced + ", but " + (d.health ? d.health.missing : "some") +
+          " are still missing. The webhooks may be pointing somewhere else.";
+        btn.disabled = false; btn.textContent = "Try again";
+      }
+    } catch (e) {
+      document.getElementById("syncWarnText").textContent = "Could not fetch the missing orders.";
+      btn.disabled = false; btn.textContent = "Try again";
+    }
+  });
+
+  // Every product picker on this page — the stock add box, the material-code
+  // pairing box, and each row's "Change product" — is an input with its results
+  // list as a sibling inside a positioned parent. They all used to close only
+  // when you picked something or emptied the field, so clicking away left a
+  // list of products hanging over the page with nothing to dismiss it.
+  document.addEventListener("click", function (e) {
+    document.querySelectorAll(".po-pick.open").forEach(function (box) {
+      if (!box.parentElement.contains(e.target)) box.classList.remove("open");
+    });
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape") return;
+    document.querySelectorAll(".po-pick.open").forEach(function (box) { box.classList.remove("open"); });
+  });
+
+  // Stock is the tab the page opens on, so the switch handler below never
+  // fires for it and its first load has to be kicked off here.
+  loadStock();
+
+  function showStockPane(which) {
+    document.getElementById("tab-stock").classList.toggle("active", which === "stock");
+    document.getElementById("tab-import").classList.toggle("active", which === "import");
+    window.scrollTo({ top: 0 });
+  }
+  document.getElementById("stockImportBtn").addEventListener("click", function () { showStockPane("import"); });
+  document.getElementById("importBackBtn").addEventListener("click", function () { showStockPane("stock"); loadStock(); });
+
   document.querySelectorAll(".tab-btn").forEach(function (btn) {
     btn.addEventListener("click", function () {
       document.querySelectorAll(".tab-btn").forEach(function (b) { b.classList.remove("active"); });
@@ -148,6 +226,9 @@ ${stockTabScript()}
       // just from here — so a failed first load is retried on the next open
       // instead of leaving the tab blank for the rest of the session.
       if (btn.dataset.tab === "stock" && !window.__stockLoaded) { loadStock(); }
+      // Leaving the Stock area also leaves the import flow, so it is never
+      // left half-finished behind a tab that no longer shows it.
+      document.getElementById("tab-import").classList.remove("active");
     });
   });
 ${importTabScript()}

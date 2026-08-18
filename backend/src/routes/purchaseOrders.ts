@@ -3,11 +3,12 @@ import type { Env } from "../types";
 import type { AdminVars } from "../auth/adminSession";
 import { requireAdminSession } from "../auth/adminSession";
 import { getShopById } from "../db/shops";
-import { getVariantIdForMaterialCode } from "../db/materialCodeMap";
+import { getVariantIdForMaterialCode, listMaterialCodeMaps, deleteMaterialCodeMap } from "../db/materialCodeMap";
 import { parseFonterraDeliveryNote, type ParsedLine } from "../purchaseOrders/parseFonterra";
 import { pickBestMatch } from "../purchaseOrders/matching";
 import { findVariantBySku, searchVariantCandidates, searchVariantsByQuery } from "../shopify/products";
 import { listActiveLocations, getVariantState } from "../shopify/inventory";
+import { fetchStockRows } from "../shopify/stockList";
 import { upsertMaterialCodeMap } from "../db/materialCodeMap";
 import { adjustInventory } from "../shopify/inventory";
 import { createImport, type NewImportLine, listImports, getImportByIdForShop, listImportLines } from "../db/purchaseOrderImports";
@@ -302,4 +303,68 @@ purchaseOrderRoutes.get("/admin/api/purchase-orders/:id/pdf", requireAdminSessio
       "content-disposition": `attachment; filename="${record.filename.replace(/[\r\n"]/g, "")}"`,
     },
   });
+});
+
+// --- Remembered material codes -------------------------------------------
+//
+// A mapping is created implicitly whenever a merchant picks a product by hand
+// during an import, and from then on it is applied ahead of every fuzzy match,
+// silently. That is the point — but it also means one wrong pick keeps being
+// wrong on every future import, presented as a confident match. Until now
+// there was no way to see the table, let alone correct it.
+
+purchaseOrderRoutes.get("/admin/api/material-codes", requireAdminSession(), async (c) => {
+  const shopId = c.get("shopId");
+  const shop = await getShopById(c.env.DB, shopId);
+  if (!shop) return c.json({ error: "shop not found" }, 404);
+
+  const rows = await listMaterialCodeMaps(c.env.DB, shopId);
+  // Resolved against Shopify so the merchant sees the product, not a gid. A
+  // list of opaque ids cannot be audited, which would leave the wrong mapping
+  // just as invisible as before.
+  const live = await fetchStockRows(shop.shop_domain, shop.access_token, rows.map((r) => r.shopifyVariantId));
+
+  return c.json({
+    mappings: rows.map((r) => {
+      const v = live.get(r.shopifyVariantId);
+      return {
+        materialCode: r.materialCode,
+        variantId: r.shopifyVariantId,
+        updatedAt: r.updatedAt,
+        title: v?.title ?? null,
+        sku: v?.sku ?? null,
+        imageUrl: v?.imageUrl ?? null,
+        // The product this code points at has been deleted in Shopify: the
+        // mapping will match on the next import and then fail on the write.
+        missing: !v,
+      };
+    }),
+  });
+});
+
+purchaseOrderRoutes.post("/admin/api/material-codes", requireAdminSession(), async (c) => {
+  const shopId = c.get("shopId");
+  const shop = await getShopById(c.env.DB, shopId);
+  if (!shop) return c.json({ error: "shop not found" }, 404);
+
+  type Body = { materialCode?: string; variantId?: string };
+  const body = await c.req.json<Body>().catch(() => ({}) as Body);
+  const materialCode = body.materialCode?.trim();
+  if (!materialCode || !body.variantId) return c.json({ error: "materialCode and variantId required" }, 400);
+
+  // Verified against Shopify rather than taken on trust: a mapping to a
+  // non-existent variant would look correct in the list and fail at the write.
+  const live = await fetchStockRows(shop.shop_domain, shop.access_token, [body.variantId]);
+  if (!live.get(body.variantId)) return c.json({ error: "no such product in this shop" }, 404);
+
+  await upsertMaterialCodeMap(c.env.DB, {
+    id: newId("map"), shopId, materialCode,
+    shopifyVariantId: body.variantId, updatedAt: Math.floor(Date.now() / 1000),
+  });
+  return c.json({ ok: true });
+});
+
+purchaseOrderRoutes.delete("/admin/api/material-codes/:code", requireAdminSession(), async (c) => {
+  await deleteMaterialCodeMap(c.env.DB, c.get("shopId"), c.req.param("code"));
+  return c.json({ ok: true });
 });

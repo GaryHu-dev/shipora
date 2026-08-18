@@ -3,8 +3,12 @@
 export function importTabMarkup(): string {
   return `
   <div id="tab-import" class="tab-pane">
+  <!-- Reached from the Stock tab rather than from the tab bar, so it needs its
+       own way back: a tab pane normally has one because a tab button is always
+       visible, and this one no longer does. -->
+  <button class="btn back-to-stock" id="importBackBtn" type="button">← Back to stock</button>
   <div class="card">
-    <h2>Import a purchase order</h2>
+    <h2>Import a delivery note</h2>
     <p class="desc">Upload a Fonterra delivery-docket PDF. Review the recognised lines, then confirm to add the delivered quantities to Shopify stock. (Expiry dates are shown from the delivery note but not written back for now.)</p>
     <label class="po-drop" id="poDrop">
       <input type="file" id="poFile" accept="application/pdf" />
@@ -43,6 +47,25 @@ export function importTabMarkup(): string {
       </div>
     </div>
   </div>
+  <!-- Sits with the import flow because it is a matching setting, not stock:
+       these codes decide which product a delivery-note line lands on. It is
+       also the only way to pre-load the pairings before the first import, so
+       the first one does not have to be picked entirely by hand. -->
+  <div class="card" id="mapCard">
+    <h2>Remembered material codes</h2>
+    <p class="desc">When you pick a product by hand during an import, that pairing is remembered and applied automatically next time — ahead of any guess. Corrections and new pairings go here.</p>
+    <div class="map-add">
+      <input class="map-code" id="mapCodeInput" type="text" placeholder="Material code, e.g. 122352" />
+      <div class="stock-add map-prod">
+        <input type="text" id="mapProdSearch" placeholder="Search the product it should match…" autocomplete="off" />
+        <div class="po-pick" id="mapProdResults"></div>
+      </div>
+      <button class="btn primary" id="mapAddBtn" type="button" disabled>Remember</button>
+    </div>
+    <div id="mapChosen" class="map-chosen" style="display:none"></div>
+    <div id="mapList" class="map-list"></div>
+  </div>
+
   <div class="card" id="poResultCard" style="display:none">
     <h2>Result</h2>
     <ul class="po-res" id="poResultList"></ul>
@@ -342,7 +365,120 @@ export function importTabScript(): string {
       });
       document.getElementById("poResultCard").style.display = "";
       document.getElementById("poResultCard").scrollIntoView({ behavior: "smooth", block: "nearest" });
+      // The delivery has landed in Shopify, so the stock figures on the list
+      // behind this pane are now stale. Refresh them rather than leaving the
+      // merchant looking at pre-import numbers next time they switch back.
+      if (window.__stockLoaded) { window.__stockLoaded = false; }
     } catch (e) { msg.textContent = "Sync failed — please try again."; }
     btn.disabled = false; btn.textContent = "Confirm sync";
-  });`;
+  });
+  // ---- Remembered material codes ------------------------------------------
+  var mapPick = null;
+
+  async function loadMappings() {
+    var list = document.getElementById("mapList");
+    try {
+      var res = await api("/admin/api/material-codes");
+      var data = await res.json();
+    } catch (e) {
+      list.innerHTML = ""; 
+      var err = document.createElement("div"); err.className = "map-empty";
+      err.textContent = "Couldn't load the remembered codes.";
+      list.appendChild(err); return;
+    }
+    list.innerHTML = "";
+    if (!data.mappings.length) {
+      var em = document.createElement("div"); em.className = "map-empty";
+      em.textContent = "Nothing remembered yet. Pairings appear here after you pick a product by hand during an import.";
+      list.appendChild(em); return;
+    }
+    data.mappings.forEach(function (m) {
+      var row = document.createElement("div"); row.className = "map-row";
+      var code = document.createElement("span"); code.className = "code"; code.textContent = m.materialCode;
+      var arrow = document.createElement("span"); arrow.className = "arrow"; arrow.textContent = "\u2192";
+      var th;
+      if (m.imageUrl) { th = document.createElement("img"); th.src = m.imageUrl; th.alt = ""; }
+      else { th = document.createElement("div"); th.className = "noimg"; }
+      var who = document.createElement("span"); who.className = "who";
+      if (m.missing) {
+        who.className = "who gone";
+        who.textContent = "Product deleted in Shopify — this pairing will fail on the next import";
+      } else {
+        who.textContent = m.title + (m.sku ? "  \u00b7  SKU " + m.sku : "");
+      }
+      var rm = document.createElement("button"); rm.className = "btn rm"; rm.textContent = "Forget";
+      rm.addEventListener("click", async function () {
+        rm.disabled = true;
+        try {
+          await api("/admin/api/material-codes/" + encodeURIComponent(m.materialCode), { method: "DELETE" });
+          loadMappings();
+        } catch (e) { rm.disabled = false; rm.textContent = "Try again"; }
+      });
+      row.appendChild(code); row.appendChild(arrow); row.appendChild(th); row.appendChild(who); row.appendChild(rm);
+      list.appendChild(row);
+    });
+  }
+
+  function refreshMapAdd() {
+    document.getElementById("mapAddBtn").disabled =
+      !(document.getElementById("mapCodeInput").value.trim() && mapPick);
+  }
+  document.getElementById("mapCodeInput").addEventListener("input", refreshMapAdd);
+
+  var mapSearchT;
+  document.getElementById("mapProdSearch").addEventListener("input", function (e) {
+    var q = e.target.value.trim();
+    var box = document.getElementById("mapProdResults");
+    mapPick = null; refreshMapAdd();
+    clearTimeout(mapSearchT);
+    if (q.length < 2) { box.classList.remove("open"); box.innerHTML = ""; return; }
+    mapSearchT = setTimeout(async function () {
+      try {
+        var res = await api("/admin/api/products/search?q=" + encodeURIComponent(q));
+        var data = await res.json();
+      } catch (err) { box.classList.remove("open"); return; }
+      box.innerHTML = "";
+      if (!data.variants.length) { box.classList.remove("open"); return; }
+      data.variants.slice(0, 8).forEach(function (v) {
+        var a = document.createElement("a"); a.href = "#";
+        var th;
+        if (v.imageUrl) { th = document.createElement("img"); th.className = "pk-thumb"; th.src = v.imageUrl; th.alt = ""; }
+        else { th = document.createElement("div"); th.className = "pk-thumb"; th.textContent = "\u25A6"; }
+        var meta = document.createElement("div");
+        var t = document.createElement("div"); t.className = "pk-title"; t.textContent = v.title;
+        var sk = document.createElement("div"); sk.className = "pk-sku"; sk.textContent = v.sku ? "SKU " + v.sku : "No SKU";
+        meta.appendChild(t); meta.appendChild(sk); a.appendChild(th); a.appendChild(meta);
+        a.addEventListener("click", function (ev) {
+          ev.preventDefault();
+          mapPick = v;
+          e.target.value = "";
+          box.classList.remove("open"); box.innerHTML = "";
+          var chosen = document.getElementById("mapChosen");
+          chosen.innerHTML = ""; chosen.style.display = "";
+          chosen.appendChild(document.createTextNode("Will point at "));
+          var b = document.createElement("b"); b.textContent = v.title; chosen.appendChild(b);
+          refreshMapAdd();
+        });
+        box.appendChild(a);
+      });
+      box.classList.add("open");
+    }, 250);
+  });
+
+  document.getElementById("mapAddBtn").addEventListener("click", async function () {
+    var btn = this; btn.disabled = true;
+    try {
+      await api("/admin/api/material-codes", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ materialCode: document.getElementById("mapCodeInput").value.trim(), variantId: mapPick.id }),
+      });
+      document.getElementById("mapCodeInput").value = "";
+      document.getElementById("mapChosen").style.display = "none";
+      mapPick = null;
+      loadMappings();
+    } catch (e) { btn.disabled = false; }
+  });
+
+  loadMappings();
+`;
 }

@@ -8,7 +8,8 @@ Shopify store; multi-tenant (one deployment serves many shops, each isolated).
 
 **Goods in — purchase-order import** (merchant, in the Shopify admin)
 
-1. Upload a supplier delivery-note PDF (Fonterra format) on the admin **Import** tab.
+1. Open the admin's **Stock** tab and choose **Import delivery note**, then upload a supplier
+   delivery-note PDF (Fonterra format).
 2. Each line is parsed — material code, description, expiry date (`SLED`), delivered
    quantity — and matched to a Shopify variant: exact SKU → a remembered material-code
    mapping → fuzzy title match → manual pick.
@@ -53,10 +54,12 @@ Shopify store; multi-tenant (one deployment serves many shops, each isolated).
   load and save is **rejected rather than silently erased**. Per-row "last counted" plus a
   *Not counted this week* filter answer "what's left?" mid-count. Best Before Dates are parsed
   out of each product's description and shown; editing them is a later stage.
-- **Import** tab: upload a supplier delivery-note PDF → parsed, matched (with product
-  thumbnails, editable per line), previewed (current → resulting stock) → a confirmation
-  dialog that **leads with the lines that will be skipped** → confirm to add the delivered
-  quantities to Shopify stock. Imported products join the Stock tab automatically.
+  **Import delivery note** opens from this tab rather than sitting beside it: counting by
+  hand and reading a delivery note both change what the shop holds, and differ only in where
+  the numbers come from. The PDF is parsed, matched (with product thumbnails, editable per
+  line), previewed (current → resulting stock), then a confirmation dialog that **leads with
+  the lines that will be skipped** → confirm to add the delivered quantities to Shopify
+  stock. Imported products join the tracked list automatically.
 - **History** tab: every past import with per-line results; download the original PDF.
 - Order-details **block extension** (`shopify-app/`): lists an order's photos with
   category badges + View links.
@@ -77,9 +80,14 @@ Shopify store; multi-tenant (one deployment serves many shops, each isolated).
 - OAuth install (auto-triggered from `/admin` if not yet installed), order sync,
   webhooks (orders create/updated, app/uninstalled).
 - Purchase-order PDF parsing (`unpdf`); Shopify product / inventory / location reads and
-  additive stock writes (`inventoryAdjustQuantities`; expiry-date metafield write-back is
-  built but disabled for now), remembered material-code → variant mappings, and per-import
-  history in D1 + the PDF in R2.
+  additive stock writes (`inventoryAdjustQuantities`), remembered material-code → variant
+  mappings, and per-import history in D1 + the PDF in R2. Best Before Dates are read from the
+  product description and never written back — the variant-metafield path was removed, not
+  disabled.
+- **Sync health**: the admin compares Shopify's most recent orders against what the database
+  holds and warns, with a one-click fetch, when any are missing. Deliberately not a
+  "time since last order" check: from inside the database a quiet shop and a dead webhook
+  look the same, which is how a real five-day outage went unnoticed.
 - Signed **per-shop** join tokens (revocable), HMAC everything, per-IP rate limiting +
   edge caching on public photo URLs, daily cleanup cron.
 
@@ -96,7 +104,7 @@ stockproof/
 └── docs/         Design specs, implementation plans, runbooks (working notes, untracked)
 ```
 
-The Shopify-embedded admin page (Photos / Stock / Import / History) is served by the backend
+The Shopify-embedded admin page (Stock / Photos / History, with Import inside Stock) is served by the backend
 Worker at `/admin`. The local repo directory may still be named `shipora`; every other name —
 Worker, D1 database, R2 bucket, Pages project, GitHub repo — is `stockproof*`.
 
@@ -107,7 +115,7 @@ Worker, D1 database, R2 bucket, Pages project, GitHub repo — is `stockproof*`.
 cd backend
 npm install
 cp .dev.vars.example .dev.vars     # fill in local secrets
-npm test                           # 185 tests, no live Shopify needed
+npm test                           # 190 tests, no live Shopify needed
 npm run dev                        # esbuild build → wrangler dev (see backend/build.mjs)
 
 # PWA — http://localhost:5173  (VITE_API_BASE points at the backend)

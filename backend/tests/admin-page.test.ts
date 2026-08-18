@@ -166,4 +166,24 @@ describe("GET /admin", () => {
     expect(loadStockBody).not.toContain("clearAll");
     expect(loadStockBody).not.toContain("clearRow");
   });
+
+  it("opens on Stock, and reaches Import from inside it rather than from the tab bar", async () => {
+    // Manual counting and importing a delivery note both do the same job —
+    // change what the shop holds — so Import is not a peer tab. This pins that
+    // structure: the pane still exists and is still reachable, just not as a
+    // top-level button.
+    await createShop(env.DB, { id: "adm-page-tabs", shopDomain: "demo.myshopify.com", accessToken: "t", joinSecret: "j", installedAt: 1 });
+    const res = await app.request("/admin?shop=demo.myshopify.com", {}, env);
+    const html = await res.text();
+
+    expect(html).toContain('data-tab="stock"');
+    expect(html).toContain('data-tab="history"');
+    expect(html).toContain('data-tab="photos"');
+    expect(html).not.toContain('data-tab="import"');
+
+    expect(html).toContain('id="tab-stock" class="tab-pane active"');
+    expect(html).toContain('id="stockImportBtn"');
+    expect(html).toContain('id="importBackBtn"');
+    expect(html).toContain('id="tab-import"');
+  });
 });

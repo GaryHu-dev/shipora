@@ -90,6 +90,36 @@ describe("searchVariantsByQuery (manual picker)", () => {
     expect(sentQuery).toContain("sku:Anchor*");
   });
 
+  it("searches every term as a SKU, not just the first", async () => {
+    // Typing a product name and then its code is the natural thing to do, and
+    // the code is the part that identifies it. Only terms[0] used to reach the
+    // sku field, so "anchor 122352" searched sku:anchor* and never the code.
+    let sentQuery = "";
+    fetchMock
+      .get("https://demo.myshopify.com")
+      .intercept({ path: `/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, method: "POST" })
+      .reply(200, productsReply((q) => { sentQuery = q; }));
+
+    await searchVariantsByQuery("demo.myshopify.com", "tok", "anchor 122352");
+    expect(sentQuery).toContain("sku:122352*");
+    expect(sentQuery).toContain("title:122352*");
+    expect(sentQuery).toContain("sku:anchor*");
+  });
+
+  it("keeps a hyphen inside a SKU but never leaves it as an operator", async () => {
+    let sentQuery = "";
+    fetchMock
+      .get("https://demo.myshopify.com")
+      .intercept({ path: `/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, method: "POST" })
+      .reply(200, productsReply((q) => { sentQuery = q; }));
+
+    await searchVariantsByQuery("demo.myshopify.com", "tok", "ANC-122352 -butter");
+    expect(sentQuery).toContain("sku:ANC-122352*");
+    // A leading hyphen is Shopify's exclusion operator; it must not survive.
+    expect(sentQuery).not.toContain(":-");
+    expect(sentQuery).toContain("title:butter*");
+  });
+
   it("returns [] for a too-short query", async () => {
     expect(await searchVariantsByQuery("demo.myshopify.com", "tok", "a")).toEqual([]);
   });

@@ -55,7 +55,15 @@ installRoutes.get("/auth/callback", async (c) => {
       console.error("initial order sync failed", { shop, err: String(err) });
     }
     try {
-      await registerWebhooks(c.env, stored);
+      // registerWebhooks reports rather than throws, so a failure here is
+      // silent unless it is logged — and a silent webhook failure means orders
+      // simply stop arriving, with the shop looking quiet rather than broken.
+      const hooks = await registerWebhooks(c.env, stored);
+      if (hooks.failed.length > 0) {
+        console.error("webhook registration incomplete", { shop, failed: hooks.failed });
+      } else if (hooks.repointed.length > 0) {
+        console.log("webhooks repointed at this deployment", { shop, topics: hooks.repointed });
+      }
     } catch (err) {
       console.error("webhook registration failed", { shop, err: String(err) });
     }
