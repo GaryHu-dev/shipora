@@ -4,11 +4,10 @@
   max-width: 420px; margin: 0 auto;
   padding: 24px 24px calc(24px + var(--safe-bottom));
 }
-.join .logo {
-  width: 64px; height: 64px; border-radius: 18px; background: #111827;
-  margin: 0 auto 22px; display: flex; align-items: center; justify-content: center;
-}
-.join .logo .box { width: 30px; height: 30px; background: #f9fafb; border-radius: 7px; }
+/* The real app icon, not a stand-in. This is the first screen a warehouse
+   worker sees after scanning, and it used to draw a generic grey square — the
+   one place the brand should be unambiguous was the one place it was faked. */
+.join .logo { width: 64px; height: 64px; border-radius: 16px; margin: 0 auto 22px; display: block; box-shadow: var(--shadow); }
 .join h1 { font-size: 24px; text-align: center; margin: 0 0 6px; }
 .join .sub { text-align: center; color: var(--muted); margin: 0 0 28px; font-size: 15px; line-height: 1.4; }
 .join label { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 8px; }

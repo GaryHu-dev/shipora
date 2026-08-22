@@ -267,12 +267,22 @@ export default function OrderDetailScreen({ orderId, onBack }: { orderId: string
 
       <div className="add-row">
         <label className={`add-btn${busy ? " busy" : ""}`}>
-          <span className="big" aria-hidden="true">📷</span>
+          <svg className="big" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+               strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M4 7h3l1.5-2h7L17 7h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1Z"/>
+            <circle cx="12" cy="13" r="3.6"/>
+          </svg>
           <span>Take photo</span>
           <input type="file" accept="image/*" capture="environment" onChange={addFiles} disabled={busy} />
         </label>
         <label className={`add-btn${busy ? " busy" : ""}`}>
-          <span className="big" aria-hidden="true">🖼️</span>
+          <svg className="big" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+               strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect x="3" y="5" width="18" height="14" rx="2"/>
+            <circle cx="8.5" cy="10" r="1.6"/>
+            <path d="m3.5 17 4.8-4.4a1.5 1.5 0 0 1 2 0L14 16"/>
+            <path d="m13 15 2.2-2a1.5 1.5 0 0 1 2 0l3.1 2.8"/>
+          </svg>
           <span>From library</span>
           <input type="file" accept="image/*" multiple onChange={addFiles} disabled={busy} />
         </label>

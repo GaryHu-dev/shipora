@@ -37,7 +37,7 @@ VITE_API_BASE=https://<your-worker>.workers.dev npm run build
 ## Deploy (Cloudflare Pages)
 
 1. `VITE_API_BASE=https://<your-worker>.workers.dev npm run build`
-2. `npx wrangler pages deploy dist --project-name=shipora-pwa`
+2. `npx wrangler pages deploy dist --project-name=stockproof-pwa`
    (creates the Pages project on first run; prints the URL).
 3. Point the backend's `PWA_URL` var at the resulting Pages URL (then re-`wrangler deploy`
    the backend) so the admin page's join-QR links resolve.

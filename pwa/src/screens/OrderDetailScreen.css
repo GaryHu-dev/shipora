@@ -1,4 +1,12 @@
-.detail { max-width: 640px; margin: 0 auto; padding: 8px 16px calc(16px + var(--safe-bottom)); }
+/* InstallPrompt renders as a sibling of the router, not inside .detail, so a
+   custom property set on .detail would never reach it — inheritance only goes
+   down. Declaring it on the body when a detail screen is mounted does reach
+   both, and costs no JavaScript. */
+body:has(.detail) { --capture-bar-h: 76px; }
+
+/* Bottom padding clears the fixed capture bar so the last photo in the list is
+   never trapped underneath it. */
+.detail { max-width: 640px; margin: 0 auto; padding: 8px 16px calc(104px + var(--safe-bottom)); }
 
 .detail .top { display: flex; align-items: center; gap: 6px; padding: 6px 0 14px; }
 .detail .top .back {
@@ -6,17 +14,47 @@
   font-size: 15px; font-weight: 600; padding: 6px 6px 6px 0;
 }
 .detail .top .back::before { content: "‹"; font-size: 22px; line-height: 1; margin-right: 2px; }
-.detail .top h1 { font-size: 20px; font-weight: 700; margin: 0; }
+/* Same reasoning as the list: this is the number being matched against a
+   physical label, so it leads. */
+.detail .top h1 { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; margin: 0;
+  font-variant-numeric: tabular-nums; }
 
-.detail .add-row { display: flex; gap: 10px; margin: 2px 0 14px; }
-.detail .add-btn {
-  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px;
-  padding: 18px; text-align: center; color: var(--primary); background: #eef2ff;
-  border: 1.5px dashed #c7d2fe; border-radius: var(--radius); font-size: 14px; font-weight: 600;
+/* Pinned to the bottom rather than left in the flow. Taking the photo is the
+   whole point of this screen, and in the flow it sat below the packing list and
+   a full postal address — off-screen on a phone, so every parcel cost a scroll
+   before the shutter. Down here it is also in reach of the thumb of the hand
+   holding the phone, which is the only free hand when the other one has a box
+   in it. */
+.detail .add-row {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+  display: flex; gap: 10px;
+  /* Full-bleed bar, but its buttons line up with the 640px content column
+     instead of stretching the width of a desktop window. */
+  padding-top: 10px; padding-bottom: calc(10px + var(--safe-bottom));
+  padding-left: max(16px, calc((100% - 640px) / 2));
+  padding-right: max(16px, calc((100% - 640px) / 2));
+  background: rgba(255,255,255,.92);
+  backdrop-filter: saturate(180%) blur(12px);
+  -webkit-backdrop-filter: saturate(180%) blur(12px);
+  border-top: 1px solid var(--border);
 }
-.detail .add-btn .big { font-size: 26px; }
+.detail .add-btn {
+  flex: 1; display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 9px;
+  padding: 15px 12px; min-height: 54px; text-align: center; color: #fff; background: var(--primary);
+  border: none; border-radius: 13px; font-size: 15px; font-weight: 700;
+  transition: background .15s ease, transform .05s ease;
+}
+.detail .add-btn:active { background: var(--primary-press); transform: scale(.99); }
+/* The library is the fallback path — most captures are taken live — so it is
+   present but visibly secondary rather than competing for the same glance. */
+.detail .add-row .add-btn:last-child { color: var(--primary); background: #eef2ff; font-weight: 600; }
+/* Was an emoji. The two capture buttons are this app's primary action, and an
+   emoji renders as a different picture on every phone — a colour photo on iOS,
+   a flat glyph on Android, whatever the desktop font has. A drawn icon looks
+   the same everywhere and inherits the button's colour. */
+.detail .add-btn .big { width: 22px; height: 22px; display: block; flex: none; }
 .detail .add-btn input { display: none; }
-.detail .add-btn.busy { color: var(--muted); background: #f3f4f6; border-color: var(--border); }
+.detail .add-btn.busy, .detail .add-row .add-btn.busy:last-child { color: var(--muted); background: #eceef1; }
 
 .detail .pending { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 16px; box-shadow: var(--shadow); }
 .detail .pend-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; margin: 10px 0 14px; }
@@ -57,7 +95,14 @@
 .detail .ship-addr .addr-ph { color: var(--muted); font-size: 14px; }
 
 .detail .cat-label { font-size: 11.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin: 2px 0 8px; }
-.detail .cat-row { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 4px; -webkit-overflow-scrolling: touch; }
+/* The row scrolls, and it used to end by simply clipping the last chip mid-word,
+   which reads as a rendering fault rather than "there is more this way". The
+   mask fades the right edge instead, so the cut looks deliberate. */
+.detail .cat-row { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 4px;
+  -webkit-overflow-scrolling: touch; scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent 100%);
+  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent 100%); }
+.detail .cat-row::-webkit-scrollbar { display: none; }
 .detail .chip { flex: none; padding: 8px 14px; font-size: 14px; font-weight: 600; border-radius: 999px; border: 1px solid var(--border); background: #fff; color: var(--muted); white-space: nowrap; }
 .detail .chip.on { background: var(--primary); color: #fff; border-color: var(--primary); }
 

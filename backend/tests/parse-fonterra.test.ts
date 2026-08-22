@@ -118,6 +118,43 @@ describe("parseItemsIntoLines", () => {
   });
 });
 
+// Regression for the quirks the real Fonterra docket has that the fixtures above
+// don't — these broke the original downward-only band and were only caught against
+// the real PDF. Coordinates mirror the real document (header at y=546, ~25pt row
+// pitch): a numeric SHIP-TO account number ABOVE the table in the item x-column,
+// and rows whose description first line sits ~1pt ABOVE the item-number anchor
+// with the wrap ~7pt below. Delivered qty differs from ordered to re-check that too.
+describe("real-layout quirks (regression)", () => {
+  const HDR = [
+    { str: "Item", x: 35, y: 546 }, { str: "Material", x: 60, y: 546 },
+    { str: "Description", x: 106, y: 546 }, { str: "Batch", x: 238, y: 546 },
+    { str: "SLED", x: 312, y: 546 }, { str: "Qty", x: 425, y: 546 },
+  ];
+  const STRAY_ABOVE = [{ str: "0004009297", x: 38, y: 677 }]; // SHIP-TO account no. — item column, above header
+  const R10 = [
+    { str: "10", x: 39, y: 522 }, { str: "122352", x: 61, y: 522 },
+    { str: "ANC BTR SLTD MY 24X454G", x: 106, y: 523 }, // desc line 1 ABOVE the anchor
+    { str: "CAN CTN", x: 106, y: 515 },                 // wrap BELOW
+    { str: "32001420", x: 239, y: 522 }, { str: "22.11.2027", x: 313, y: 522 },
+    { str: "7", x: 382, y: 522 }, { str: "5", x: 431, y: 522 }, // ordered 7, delivered 5
+    { str: "CAR", x: 457, y: 522 },
+  ];
+  const R20 = [
+    { str: "20", x: 39, y: 497 }, { str: "3113493", x: 61, y: 497 },
+    { str: "ANC WMP INST 12X1KG SCT", x: 106, y: 498 }, { str: "CTN", x: 106, y: 490 },
+    { str: "FBW02972", x: 239, y: 497 }, { str: "10.11.2027", x: 313, y: 497 },
+    { str: "2", x: 382, y: 497 }, { str: "2", x: 431, y: 497 }, { str: "CAR", x: 457, y: 497 },
+  ];
+  const SUMMARY = [{ str: "Total Product Weight :", x: 375, y: 471 }, { str: "1,716.506", x: 524, y: 471 }];
+
+  it("ignores an item-column number above the header, keeps above-anchor descriptions, and doesn't bleed rows", () => {
+    const lines = parseItemsIntoLines([[...STRAY_ABOVE, ...HDR, ...R10, ...R20, ...SUMMARY]]);
+    expect(lines).toHaveLength(2); // stray account number and page-summary line both ignored
+    expect(lines[0]).toEqual({ materialCode: "122352", description: "ANC BTR SLTD MY 24X454G CAN CTN", sled: "22.11.2027", deliveredQty: 5 });
+    expect(lines[1]).toEqual({ materialCode: "3113493", description: "ANC WMP INST 12X1KG SCT CTN", sled: "10.11.2027", deliveredQty: 2 });
+  });
+});
+
 describe("parseSled", () => {
   it("converts DD.MM.YYYY to an ISO date", () => {
     expect(parseSled("22.11.2027")).toBe("2027-11-22");

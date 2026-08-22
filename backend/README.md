@@ -2,11 +2,13 @@
 
 Cloudflare Worker (Hono) backend for StockProof — a Shopify stock assistant covering both
 sides of the warehouse. **Goods in:** parse supplier delivery-note PDFs and add the delivered
-quantities to Shopify stock, with a downloadable per-import history (expiry-date write-back is
-built but disabled for now — see below). **Goods out:** sync orders, tag them on photo upload
-(a marker in the Shopify order **Timeline**), and surface the proof-of-shipment photos in the
-order-details **admin block**. Stores shops/users/orders/photos/import-history in **D1** and
-photo + PDF bytes in **R2**.
+quantities to Shopify stock. Expiry dates are parsed and shown but **never written back** —
+that path was removed, not disabled. **Weekly counts:** set stock per product with an
+optimistic-concurrency check, so a sale landing mid-count is rejected rather than erased.
+Both are recorded in one **stock-event history**. **Goods out:** sync orders, tag them on
+photo upload (a marker in the Shopify order **Timeline**), and surface the proof-of-shipment
+photos in the order-details **admin block**. Stores shops/users/orders/photos/stock-history
+in **D1** and photo + PDF bytes in **R2**.
 
 ## Stack
 
@@ -69,7 +71,7 @@ rate-limited per IP, and edge-cached.
 ## Deploy
 
 > There is no separate "create Worker" step — `npm run deploy` (which runs `wrangler deploy`) creates (or updates) the
-> Worker named in `wrangler.jsonc` (`"name": "shipora-backend"`) and gives it a
+> Worker named in `wrangler.jsonc` (`"name": "stockproof-backend"`) and gives it a
 > `https://<name>.<your-subdomain>.workers.dev` URL. Change `name` if you want a
 > different Worker name.
 
@@ -84,12 +86,12 @@ rate-limited per IP, and edge-cached.
 1. **Create Cloudflare resources** and wire their IDs into `wrangler.jsonc`
 
    ```bash
-   npx wrangler d1 create shipora
+   npx wrangler d1 create stockproof
    #  → copy the printed database_id into wrangler.jsonc  ("d1_databases"[0].database_id)
 
-   npx wrangler r2 bucket create shipora-photos          # matches the "r2_buckets" binding
+   npx wrangler r2 bucket create stockproof-photos          # matches the "r2_buckets" binding
 
-   npx wrangler d1 migrations apply shipora --remote     # create the tables
+   npx wrangler d1 migrations apply stockproof --remote     # create the tables
    ```
 
 2. **Create the Shopify app** (Partner/Dev Dashboard → Apps → Create app manually)
@@ -135,7 +137,7 @@ rate-limited per IP, and edge-cached.
    # PWA → Cloudflare Pages  (creates the project on first run)
    cd ../pwa
    VITE_API_BASE=https://<name>.<subdomain>.workers.dev npm run build
-   npx wrangler pages deploy dist --project-name=shipora-pwa
+   npx wrangler pages deploy dist --project-name=stockproof-pwa
    #  → set the backend var PWA_URL to the printed Pages URL, then re-run `npm run deploy` in backend/
 
    # Order-page block extension (optional) → Shopify
@@ -146,7 +148,7 @@ rate-limited per IP, and edge-cached.
 6. **Install on a store & verify**
    - Open the app in Shopify admin (or the Custom-distribution install link). `/admin`
      auto-starts OAuth if the shop isn't installed yet; approve the scopes.
-   - `npx wrangler d1 execute shipora --remote --command "SELECT order_number, fulfillment_status FROM orders"`
+   - `npx wrangler d1 execute stockproof --remote --command "SELECT order_number, fulfillment_status FROM orders"`
    - Upload a photo (via the PWA) → open the order in Shopify admin → confirm the tag
      **`Shipping photos uploaded`** in the order **Timeline** and the **StockProof block**.
 
@@ -173,17 +175,27 @@ never blocks the rest; every line — including skipped — is recorded):
 
 - Stock is **additive** — `inventoryAdjustQuantities` with `delta = deliveredQty`, never an
   absolute set.
-- **Expiry-date write-back is disabled for now** — `confirm` updates stock only. The path (a
-  `shipora.expiry_date` variant metafield, written only when the variant's stock at the chosen
-  location was 0 before the adjustment) is in place and commented in `processConfirmLine`
-  (`src/routes/purchaseOrders.ts`), one line to re-enable.
+- **BBD is never written back** — `confirm` updates stock only. The delivery note's date is
+  shown beside the product's current BBD as a preview, to flag what to look at during the next
+  monthly review. The old variant-metafield write-back has been deleted rather than left
+  dormant: BBD lives in the product **description** (`src/bbd.ts`), and writing the public
+  storefront without the merchant confirming that specific change is the one thing this app
+  does not do.
 - A line matched by anything other than an exact SKU is remembered in `material_code_map`
   for next time.
+- Every matched, non-skipped line's variant is added to `tracked_products`, so a delivery
+  grows the Stock tab by itself.
 
 The original PDF goes to R2 at `po/{shop_id}/{import_id}.pdf` (the same bucket as photos, a
 disjoint keyspace — the retention cron only touches photos, so PDFs are never auto-deleted).
-Each import and its per-line diff are stored in `purchase_order_imports` /
-`purchase_order_import_lines` (migration `0004`) and surfaced under the admin **History** tab.
+Each import and its per-line diff are stored in `stock_events` / `stock_event_lines`
+(migrations `0006`–`0007`) and surfaced under the admin **History** tab. **Weekly counts land
+in the same two tables**, distinguished by `kind` (`import` | `count`): the two are the same
+shape of event — a batch of lines, each with a before and an after, written at one location
+at one moment — and the merchant wants one timeline, not two lists to interleave by eye.
+Import-only columns (`filename`, `pdf_r2_key`, `material_code`, `delivered_qty`, `sled`) are
+NULL on a count, so nullability carries meaning. The `purchase_order_*` tables they replaced
+were empty in every shop and were dropped rather than renamed around.
 
 ## Notes
 

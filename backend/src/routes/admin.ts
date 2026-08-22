@@ -7,6 +7,9 @@ import { listOrders, getOrderByShopifyId } from "../db/orders";
 import { listOrderTimeline, getPhotoByIdForShop, listRecentPhotos } from "../db/photos";
 import { getShopById, setRetentionDays, setJoinSecret } from "../db/shops";
 import { deleteExpiredPhotos } from "../cleanup";
+import { checkSyncHealth } from "../shopify/syncHealth";
+import { syncRecentOrders } from "../shopify/ordersSync";
+import { registerWebhooks } from "../shopify/webhooks";
 import { newId } from "../ids";
 import { getPhoto } from "../r2";
 
@@ -91,4 +94,33 @@ adminRoutes.get("/admin/api/photos/:id/raw", requireAdminSession(), async (c) =>
       "content-disposition": "inline",
     },
   });
+});
+
+// Is order sync actually working? Answered against Shopify rather than against
+// the clock — see syncHealth.ts for why "time since the last order" cannot
+// tell a quiet shop from a broken webhook.
+adminRoutes.get("/admin/api/sync-health", requireAdminSession(), async (c) => {
+  const shop = await getShopById(c.env.DB, c.get("shopId"));
+  if (!shop) return c.json({ error: "shop not found" }, 404);
+  try {
+    return c.json(await checkSyncHealth(c.env.DB, shop));
+  } catch {
+    // A failed check is not a failed sync. Say so rather than showing an
+    // alarm the merchant cannot act on.
+    return c.json({ unavailable: true });
+  }
+});
+
+// The remedy for the warning above. Without it the banner would only be able
+// to tell someone their orders are missing.
+adminRoutes.post("/admin/api/sync-health/resync", requireAdminSession(), async (c) => {
+  const shop = await getShopById(c.env.DB, c.get("shopId"));
+  if (!shop) return c.json({ error: "shop not found" }, 404);
+  // Backfilling the missing orders treats the symptom. The cause is almost
+  // always a subscription pointing at a deployment that no longer answers —
+  // which is what happened on the account move — so repair that in the same
+  // click, or the same orders go missing again tomorrow.
+  const hooks = await registerWebhooks(c.env, shop);
+  const synced = await syncRecentOrders(c.env.DB, shop, Math.floor(Date.now() / 1000));
+  return c.json({ synced, repointed: hooks.repointed, health: await checkSyncHealth(c.env.DB, shop) });
 });

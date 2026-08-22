@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { describe, it, expect, beforeEach } from "vitest";
 import { app } from "../src/index";
-import { createImport } from "../src/db/purchaseOrderImports";
+import { createStockEvent } from "../src/db/stockEvents";
 import { putPhoto } from "../src/r2";
 
 // Same session-token minting as admin-api.test.ts — requireAdminSession()
@@ -31,10 +31,10 @@ beforeEach(async () => {
 
 async function seedImport() {
   await putPhoto(env.PHOTOS, "po/shop_1/po_1.pdf", new TextEncoder().encode("%PDF-fake").buffer as ArrayBuffer, "application/pdf");
-  await createImport(env.DB, {
-    id: "po_1", shopId: "shop_1", filename: "delivery.pdf", pdfR2Key: "po/shop_1/po_1.pdf",
-    locationId: "gid://shopify/Location/1", importedAt: 100,
-    lines: [{ id: "line_1", materialCode: "500123", description: "ACME MILK", shopifyVariantId: "gid://1", deliveredQty: 10, qtyBefore: 0, qtyAfter: 10, sled: "15.03.2027", expiryUpdated: true, skipped: false, status: "ok" }],
+  await createStockEvent(env.DB, {
+    id: "po_1", shopId: "shop_1", kind: "import" as const, filename: "delivery.pdf", pdfR2Key: "po/shop_1/po_1.pdf",
+    locationId: "gid://shopify/Location/1", createdAt: 100,
+    lines: [{ id: "line_1", materialCode: "500123", description: "ACME MILK", productTitle: "ACME MILK", shopifyVariantId: "gid://1", deliveredQty: 10, qtyBefore: 0, qtyAfter: 10, sled: "15.03.2027", skipped: false, status: "ok", error: null }],
   });
 }
 

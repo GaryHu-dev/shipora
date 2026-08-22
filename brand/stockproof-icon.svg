@@ -1,0 +1,42 @@
+<!--
+  StockProof icon — master source. Render every PNG from this file; never edit
+  the PNGs by hand.
+
+  An isometric carton in Google's primary palette, with a tick on its front
+  face. The carton is kept from the previous icon because merchants and
+  warehouse staff already recognise it; what changed is the execution — solid
+  colour planes with white seams, instead of thin white line-art on a flat blue
+  tile.
+
+  The tick is drawn in the plane of the face it sits on, not flat. A flat tick
+  pasted onto a receding face reads as a sticker.
+
+  On margin: the carton is scaled 1.32 to sit close to the tile edges. A
+  comfortable margin looked correct in isolation and wrong in place — a white
+  field on Shopify's white admin gives the icon no boundary, so the whole tile
+  reads as empty space and the mark looks smaller than the full-bleed icons
+  beside it. Same on a phone home screen. Do not "tidy" this back to a roomier
+  margin without looking at it at 40px next to other icons.
+
+  The white seams are 17 rather than 22 so that they render at their original
+  weight after the 1.32 scale; the tick is left at 50 and scales with the
+  carton.
+
+  Palette: #4285F4 / #34A853 / #FBBC05 on white. Google red is deliberately
+  unused — three planes need three colours, and a fourth would be decoration.
+
+  Android's maskable purpose needs stockproof-icon-maskable.svg instead, where
+  the carton is sized to survive the central-80% crop.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <rect width="1024" height="1024" fill="#FFFFFF"/>
+  <g transform="translate(512 520) scale(1.32) translate(-512 -520)">
+    <g stroke="#FFFFFF" stroke-width="17" stroke-linejoin="round">
+      <path d="M512 218 L774 369 L512 520 L250 369 Z" fill="#4285F4"/>
+      <path d="M250 369 L512 520 L512 822 L250 671 Z" fill="#34A853"/>
+      <path d="M774 369 L774 671 L512 822 L512 520 Z" fill="#FBBC05"/>
+    </g>
+    <path d="M316 534 L365 629 L475 547" stroke="#FFFFFF" stroke-width="50"
+          fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

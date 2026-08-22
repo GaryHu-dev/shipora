@@ -1,5 +1,5 @@
 {
-  "name": "shipora-backend",
+  "name": "stockproof-backend",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -9,8 +9,8 @@
     "deploy": "node build.mjs && wrangler deploy dist/index.mjs --no-bundle",
     "test": "vitest run",
     "test:watch": "vitest",
-    "migrate:local": "wrangler d1 migrations apply shipora --local",
-    "migrate:remote": "wrangler d1 migrations apply shipora --remote"
+    "migrate:local": "wrangler d1 migrations apply stockproof --local",
+    "migrate:remote": "wrangler d1 migrations apply stockproof --remote"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.6.0",

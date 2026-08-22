@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import "./InstallPrompt.css";
 
-const DISMISS_KEY = "shipora_install_dismissed";
-export const SHOW_INSTALL_EVENT = "shipora:show-install";
+const DISMISS_KEY = "stockproof_install_dismissed";
+export const SHOW_INSTALL_EVENT = "stockproof:show-install";
 
 export function isStandalone(): boolean {
   const mm = window.matchMedia?.("(display-mode: standalone)")?.matches;
@@ -65,7 +65,7 @@ export default function InstallPrompt() {
 
   return (
     <div className="install" role="dialog" aria-label="Add to Home Screen">
-      <span className="ic" aria-hidden="true" />
+      <img className="ic" src="/icon-192.png" alt="" width={34} height={34} />
       <div className="txt">
         {ios ? (
           <>Add <b>StockProof</b> to your Home Screen — tap <b>Share&nbsp;⬆︎</b>, then <b>Add to Home Screen</b>.</>

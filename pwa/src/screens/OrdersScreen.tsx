@@ -28,6 +28,10 @@ export default function OrdersScreen({ onOpenOrder }: { onOpenOrder: (id: string
   const [offset, setOffset] = useState(cache?.offset ?? 0);
   const [hasMore, setHasMore] = useState(cache?.hasMore ?? true);
   const [refreshing, setRefreshing] = useState(false);
+  // A failed load used to fall through to the same empty list as "this shop has
+  // no orders in this view". The two need to look different: one is a fact, the
+  // other is a problem the person can act on.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [pull, setPull] = useState(0);
   const restored = useRef(cache != null);
@@ -42,8 +46,10 @@ export default function OrdersScreen({ onOpenOrder }: { onOpenOrder: (id: string
       setOrders(rows);
       setOffset(rows.length);
       setHasMore(rows.length === PAGE);
+      setLoadFailed(false);
     } catch {
       setOrders((o) => o ?? []);
+      setLoadFailed(true);
     } finally {
       setRefreshing(false);
     }
@@ -154,7 +160,16 @@ export default function OrdersScreen({ onOpenOrder }: { onOpenOrder: (id: string
           ))}
         </div>
       )}
-      {orders !== null && orders.length === 0 && <div className="empty">No orders in this view</div>}
+      {orders !== null && orders.length === 0 && loadFailed && (
+        <div className="empty">
+          Couldn&apos;t load orders.{" "}
+          <button className="linklike" onClick={() => loadFirst(false)}>Try again</button>
+          <div className="empty-sub">If this keeps happening, sign out and scan the join code again.</div>
+        </div>
+      )}
+      {orders !== null && orders.length === 0 && !loadFailed && (
+        <div className="empty">No orders in this view</div>
+      )}
 
       <div className="list">
         {orders?.map((o) => {

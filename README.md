@@ -8,7 +8,8 @@ Shopify store; multi-tenant (one deployment serves many shops, each isolated).
 
 **Goods in — purchase-order import** (merchant, in the Shopify admin)
 
-1. Upload a supplier delivery-note PDF (Fonterra format) on the admin **Import** tab.
+1. Open the admin's **Stock** tab and choose **Import delivery note**, then upload a supplier
+   delivery-note PDF (Fonterra format).
 2. Each line is parsed — material code, description, expiry date (`SLED`), delivered
    quantity — and matched to a Shopify variant: exact SKU → a remembered material-code
    mapping → fuzzy title match → manual pick.
@@ -19,10 +20,11 @@ Shopify store; multi-tenant (one deployment serves many shops, each isolated).
    original PDF plus a line-by-line diff — under the **History** tab, PDF downloadable.
 
 > Expiry dates (`SLED`/BBD) are parsed from the delivery note and shown for review, but
-> **not written back to Shopify for now** — confirm updates stock only. The write-back path
-> (a `shipora.expiry_date` variant metafield, overwritten only when the variant's stock was
-> 0) is in place and easy to re-enable; see `processConfirmLine` in
-> `backend/src/routes/purchaseOrders.ts`.
+> **never written back** — confirm updates stock only. The merchant reviews Best Before Dates
+> by hand each month, so auto-writing would buy a few weeks of freshness while being the one
+> place the app edits the public storefront without the merchant confirming that specific
+> change. The earlier variant-metafield write-back path has been removed rather than left
+> dormant. BBD lives in the product **description**, not a metafield — see `backend/src/bbd.ts`.
 
 **Goods out — proof of shipment** (warehouse staff, on their phone)
 
@@ -44,10 +46,31 @@ Shopify store; multi-tenant (one deployment serves many shops, each isolated).
 **Shopify admin** (embedded page, served by the backend at `/admin`)
 - **Photos** tab: join QR + **Reset code** (revoke leaked links per-shop), photo retention
   (configurable days) + one-click cleanup, **Recent photos** with order-number search.
-- **Import** tab: upload a supplier delivery-note PDF → parsed, matched (with product
-  thumbnails, editable per line), previewed (current → resulting stock) → confirm to add the
-  delivered quantities to Shopify stock.
-- **History** tab: every past import with per-line results; download the original PDF.
+- **Stock** tab: a merchant-curated product list for the weekly count. Stock is read **live**
+  from Shopify on every load — nothing is cached, so the number shown can never drift from
+  Shopify. Rows are read-only until opened; edit one or bulk-edit the lot, confirm each with
+  ✓ (or Enter, which confirms and drops to the next row), then a dialog itemises every change
+  before anything is written. Writes carry `compareQuantity`, so a sale landing between page
+  load and save is **rejected rather than silently erased**. Per-row "last counted" plus a
+  *Not counted this week* filter answer "what's left?" mid-count. Best Before Dates are parsed
+  out of each product's description and shown; editing them is a later stage. Adding a product
+  searches **active products only** (a draft is not stock anyone counts) across titles and
+  SKUs, with thumbnails and live stock beside each result; every typed word must match, so
+  adding a word narrows rather than widens, and a code fragment matching no prefix falls back
+  to a contains-scan of the catalogue.
+  **Import delivery note** opens from this tab rather than sitting beside it: counting by
+  hand and reading a delivery note both change what the shop holds, and differ only in where
+  the numbers come from. The PDF is parsed, matched (with product thumbnails, editable per
+  line), previewed (current → resulting stock), then a confirmation dialog that **leads with
+  the lines that will be skipped** → confirm to add the delivered quantities to Shopify
+  stock. Imported products join the tracked list automatically.
+- **History** tab: one timeline of **every change StockProof has made to stock** — weekly
+  counts and delivery-note imports together, newest first, filterable by kind. Each entry
+  shows how many products moved and the net units; opening one lists every line with the
+  product it changed, its before → after, and the reason any line failed. Imports keep the
+  original PDF, downloadable. Counts are recorded per **Save**, whether that Save moved one
+  product or fifty, and a Save whose lines all failed is recorded too — "I saved and nothing
+  happened" is exactly what the record has to be able to answer.
 - Order-details **block extension** (`shopify-app/`): lists an order's photos with
   category badges + View links.
 
@@ -67,29 +90,33 @@ Shopify store; multi-tenant (one deployment serves many shops, each isolated).
 - OAuth install (auto-triggered from `/admin` if not yet installed), order sync,
   webhooks (orders create/updated, app/uninstalled).
 - Purchase-order PDF parsing (`unpdf`); Shopify product / inventory / location reads and
-  additive stock writes (`inventoryAdjustQuantities`; expiry-date metafield write-back is
-  built but disabled for now), remembered material-code → variant mappings, and per-import
-  history in D1 + the PDF in R2.
+  additive stock writes (`inventoryAdjustQuantities`), remembered material-code → variant
+  mappings, and per-import history in D1 + the PDF in R2. Best Before Dates are read from the
+  product description and never written back — the variant-metafield path was removed, not
+  disabled.
+- **Sync health**: the admin compares Shopify's most recent orders against what the database
+  holds and warns, with a one-click fetch, when any are missing. Deliberately not a
+  "time since last order" check: from inside the database a quiet shop and a dead webhook
+  look the same, which is how a real five-day outage went unnoticed.
 - Signed **per-shop** join tokens (revocable), HMAC everything, per-IP rate limiting +
   edge caching on public photo URLs, daily cleanup cron.
 
 ## Repo structure
 
 ```
-shipora/
+stockproof/
 ├── backend/      Cloudflare Worker (Hono): OAuth, order sync, webhooks, photo store,
-│                 purchase-order import (parse → match → add stock), admin page
+│                 purchase-order import (parse → match → add stock), stock list, admin page
 │                 → D1 (metadata) + R2 (photo & PDF bytes). See backend/README.md
 ├── pwa/          Mobile PWA (Vite + React): join, orders, capture/rotate/upload, settings
 │                 → deploy to Cloudflare Pages. See pwa/README.md
 ├── shopify-app/  Shopify CLI app: the order-details block extension (deployed via CLI)
-└── docs/         Design specs & implementation plans (working notes, untracked)
+└── docs/         Design specs, implementation plans, runbooks (working notes, untracked)
 ```
 
-The Shopify-embedded admin page (Photos / Import / History) is served by the backend
-Worker at `/admin`. (The repo directory, Worker, D1 database, R2 bucket, and Pages project
-still carry their original `shipora*` names — renaming those is infrastructure, separate
-from the product's display name.)
+The Shopify-embedded admin page (Stock / Photos / History, with Import inside Stock) is served by the backend
+Worker at `/admin`. The local repo directory may still be named `shipora`; every other name —
+Worker, D1 database, R2 bucket, Pages project, GitHub repo — is `stockproof*`.
 
 ## Quick start (local)
 
@@ -98,7 +125,7 @@ from the product's display name.)
 cd backend
 npm install
 cp .dev.vars.example .dev.vars     # fill in local secrets
-npm test                           # 133 tests, no live Shopify needed
+npm test                           # 224 tests, no live Shopify needed
 npm run dev                        # esbuild build → wrangler dev (see backend/build.mjs)
 
 # PWA — http://localhost:5173  (VITE_API_BASE points at the backend)
@@ -120,16 +147,16 @@ credentials.
 # 1) Backend — Cloudflare Worker (created on first deploy, named per wrangler.jsonc)
 cd backend && npm install
 npx wrangler login
-npx wrangler d1 create shipora                       # copy database_id → wrangler.jsonc
-npx wrangler r2 bucket create shipora-photos
-npx wrangler d1 migrations apply shipora --remote
+npx wrangler d1 create stockproof                       # copy database_id → wrangler.jsonc
+npx wrangler r2 bucket create stockproof-photos
+npx wrangler d1 migrations apply stockproof --remote
 npx wrangler secret put APP_SECRET                   # + SHOPIFY_API_SECRET, SHOPIFY_API_KEY, ADMIN_KEY
 npm run deploy                                        # esbuild build + wrangler deploy; prints your Worker URL
 
 # 2) PWA — Cloudflare Pages
 cd ../pwa && npm install
 VITE_API_BASE=https://<worker-url> npm run build
-npx wrangler pages deploy dist --project-name=shipora-pwa
+npx wrangler pages deploy dist --project-name=stockproof-pwa
 #   then set the backend var PWA_URL to the Pages URL and re-run `npm run deploy` in backend/
 
 # 3) Order-page block (optional) — Shopify
@@ -181,9 +208,10 @@ TypeScript · Vitest.
 ## Status
 
 Functionally complete and running on a real store via Custom distribution: proof-of-shipment
-photos plus purchase-order import (adds delivered quantities to Shopify stock, with import
-history). Expiry-date write-back is built but disabled for now (dates are parsed and shown,
-not written). Deferred until public App-Store submission: GDPR compliance webhooks, Shopify
+photos, weekly stock counts, and purchase-order import — with one history covering every
+change made to stock. Expiry dates are parsed from delivery notes and shown for review but
+**never written back**; that path was removed rather than left dormant, so nothing in this
+app edits a product's public description. Deferred until public App-Store submission: GDPR compliance webhooks, Shopify
 Billing, and full Protected Customer Data approval (street/zip already work where the store
 grants it). Purchase-order parsing currently targets the Fonterra delivery-docket layout;
 other supplier formats are added as needed.

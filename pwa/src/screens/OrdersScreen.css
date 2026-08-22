@@ -10,7 +10,7 @@
 .orders .load-more:disabled { color: var(--muted); }
 
 .orders .orders-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-.orders .orders-title { font-size: 18px; font-weight: 700; }
+.orders .orders-title { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; }
 .orders .refresh { font-size: 13px; font-weight: 600; color: var(--primary); background: none; border: 1px solid var(--border); border-radius: 999px; padding: 7px 14px; }
 .orders .refresh:disabled { color: var(--muted); }
 
@@ -28,18 +28,30 @@
 .orders .list { display: flex; flex-direction: column; gap: 10px; }
 .orders .row {
   display: flex; align-items: center; gap: 10px;
-  padding: 15px 14px; background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 16px 14px; background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow);
   transition: transform .05s ease;
 }
 .orders .row:active { transform: scale(.99); }
 .orders .row .main { flex: 1; min-width: 0; }
-.orders .row .num { font-weight: 700; font-size: 16px; }
-.orders .row .cust { color: var(--muted); font-size: 14px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The order number is what someone matches against a label in their other
+   hand. It was set at the same weight as everything else on the row, so the
+   eye had to hunt for it. Tabular figures so the digits line up down the
+   column and a wrong match is visible as a shape, not just a value. */
+.orders .row .num { font-weight: 800; font-size: 20px; letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums; line-height: 1.15; }
+.orders .row .cust { color: var(--muted); font-size: 14px; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .orders .row .chev { color: #c0c6cf; font-size: 22px; line-height: 1; margin-left: 2px; }
 
 .orders .empty, .orders .loading { text-align: center; color: var(--muted); padding: 60px 0; }
 
 .orders .skel-row { pointer-events: none; }
-.orders .skel-num { width: 42%; height: 15px; margin-bottom: 8px; }
+.orders .skel-num { width: 42%; height: 19px; margin-bottom: 9px; }
 .orders .skel-cust { width: 64%; height: 12px; }
 .orders .skel-badge { width: 64px; height: 22px; border-radius: 999px; flex: none; }
+
+/* Failure state — deliberately distinct from "no orders in this view", which
+   is a fact rather than a problem. Swallowing the error into the same empty
+   list made a broken load indistinguishable from an empty shop. */
+.orders .linklike { font: inherit; color: var(--primary); background: none; border: none;
+  padding: 0; text-decoration: underline; cursor: pointer; }
+.orders .empty-sub { margin-top: 10px; font-size: 13px; color: var(--muted); }

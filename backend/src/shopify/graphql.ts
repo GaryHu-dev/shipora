@@ -1,3 +1,10 @@
+// Before bumping this: the Stock tab's whole safety story rests on
+// `compareQuantity` / `ignoreCompareQuantity` in `inventorySetQuantities`
+// (see shopify/stockList.ts), and Shopify deprecated both from API 2026-01,
+// with an `@idempotent` directive becoming mandatory from 2026-04. A version
+// bump therefore is not a config change — it requires reworking the mechanism
+// that stops a stale page from silently erasing a sale. Read the current
+// inventory API docs and re-verify the mutation shape first.
 export const SHOPIFY_API_VERSION = "2025-10";
 
 export async function shopifyGraphQL<T>(

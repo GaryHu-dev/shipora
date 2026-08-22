@@ -1,4 +1,4 @@
-const KEY = "shipora_session";
+const KEY = "stockproof_session";
 
 export interface Session {
   token: string;
@@ -28,7 +28,7 @@ export function clearSession(): void {
 // Remember the join credentials so the app can silently re-establish a session
 // on later launches (important on iOS, where a home-screen app has its own
 // isolated storage and may relaunch without the invite token in the URL).
-const JOIN_KEY = "shipora_join";
+const JOIN_KEY = "stockproof_join";
 
 export function saveJoin(joinToken: string, name: string): void {
   localStorage.setItem(JOIN_KEY, JSON.stringify({ joinToken, name }));

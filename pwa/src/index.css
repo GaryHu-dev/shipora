@@ -1,8 +1,11 @@
 :root {
-  --bg: #f4f5f7;
+  /* Deeper text and a cooler ground than the stock greys: this is read at
+     arm's length, often in a warehouse's mixed lighting, sometimes through a
+     screen protector. Contrast buys legibility that spacing cannot. */
+  --bg: #f1f3f6;
   --card: #ffffff;
-  --text: #111827;
-  --muted: #6b7280;
+  --text: #0b1220;
+  --muted: #667085;
   --border: #e5e7eb;
   --primary: #2563eb;
   --primary-press: #1d4ed8;
@@ -10,6 +13,7 @@
   --green-bg: #d1fae5; --green-fg: #065f46;
   --radius: 14px;
   --shadow: 0 1px 3px rgba(16,24,40,.06), 0 1px 2px rgba(16,24,40,.04);
+  --capture-bar-h: 0px;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
