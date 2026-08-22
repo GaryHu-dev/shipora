@@ -53,14 +53,24 @@ Shopify store; multi-tenant (one deployment serves many shops, each isolated).
   before anything is written. Writes carry `compareQuantity`, so a sale landing between page
   load and save is **rejected rather than silently erased**. Per-row "last counted" plus a
   *Not counted this week* filter answer "what's left?" mid-count. Best Before Dates are parsed
-  out of each product's description and shown; editing them is a later stage.
+  out of each product's description and shown; editing them is a later stage. Adding a product
+  searches **active products only** (a draft is not stock anyone counts) across titles and
+  SKUs, with thumbnails and live stock beside each result; every typed word must match, so
+  adding a word narrows rather than widens, and a code fragment matching no prefix falls back
+  to a contains-scan of the catalogue.
   **Import delivery note** opens from this tab rather than sitting beside it: counting by
   hand and reading a delivery note both change what the shop holds, and differ only in where
   the numbers come from. The PDF is parsed, matched (with product thumbnails, editable per
   line), previewed (current → resulting stock), then a confirmation dialog that **leads with
   the lines that will be skipped** → confirm to add the delivered quantities to Shopify
   stock. Imported products join the tracked list automatically.
-- **History** tab: every past import with per-line results; download the original PDF.
+- **History** tab: one timeline of **every change StockProof has made to stock** — weekly
+  counts and delivery-note imports together, newest first, filterable by kind. Each entry
+  shows how many products moved and the net units; opening one lists every line with the
+  product it changed, its before → after, and the reason any line failed. Imports keep the
+  original PDF, downloadable. Counts are recorded per **Save**, whether that Save moved one
+  product or fifty, and a Save whose lines all failed is recorded too — "I saved and nothing
+  happened" is exactly what the record has to be able to answer.
 - Order-details **block extension** (`shopify-app/`): lists an order's photos with
   category badges + View links.
 
@@ -115,7 +125,7 @@ Worker, D1 database, R2 bucket, Pages project, GitHub repo — is `stockproof*`.
 cd backend
 npm install
 cp .dev.vars.example .dev.vars     # fill in local secrets
-npm test                           # 190 tests, no live Shopify needed
+npm test                           # 224 tests, no live Shopify needed
 npm run dev                        # esbuild build → wrangler dev (see backend/build.mjs)
 
 # PWA — http://localhost:5173  (VITE_API_BASE points at the backend)
@@ -198,9 +208,10 @@ TypeScript · Vitest.
 ## Status
 
 Functionally complete and running on a real store via Custom distribution: proof-of-shipment
-photos plus purchase-order import (adds delivered quantities to Shopify stock, with import
-history). Expiry-date write-back is built but disabled for now (dates are parsed and shown,
-not written). Deferred until public App-Store submission: GDPR compliance webhooks, Shopify
+photos, weekly stock counts, and purchase-order import — with one history covering every
+change made to stock. Expiry dates are parsed from delivery notes and shown for review but
+**never written back**; that path was removed rather than left dormant, so nothing in this
+app edits a product's public description. Deferred until public App-Store submission: GDPR compliance webhooks, Shopify
 Billing, and full Protected Customer Data approval (street/zip already work where the store
 grants it). Purchase-order parsing currently targets the Fonterra delivery-docket layout;
 other supplier formats are added as needed.

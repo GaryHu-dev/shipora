@@ -31,16 +31,15 @@ export function importTabMarkup(): string {
     <h2>Review before confirming</h2>
     <div class="po-loading" id="poLoading"><span class="spin"></span> Reading the PDF and matching products…</div>
     <div id="poReviewBody" style="display:none">
-      <div class="settings-row">
-        <label>Location</label>
-        <select id="poLocation"></select>
-      </div>
+      <div class="stock-loc-note" id="poLocationRow" style="display:none"></div>
+      <div class="tbl-scroll">
       <table class="po-table" id="poTable">
         <thead>
           <tr><th>#</th><th>Product</th><th>Received</th><th>Expiry (BBD)</th><th>Stock</th><th>Skip</th></tr>
         </thead>
         <tbody id="poTableBody"></tbody>
       </table>
+      </div>
       <div class="po-confirm-row">
         <button class="btn primary" id="poConfirmBtn">Confirm sync</button>
         <span class="msg" id="poConfirmMsg"></span>
@@ -117,21 +116,27 @@ export function importTabScript(): string {
     btn.disabled = false; btn.textContent = "Parse PDF";
   });
 
+  var poLocationId = null; // the shop's only location; see renderPoReview()
+
   function renderPoReview() {
     document.getElementById("poLoading").style.display = "none";
     document.getElementById("poReviewBody").style.display = "";
-    var locSel = document.getElementById("poLocation");
-    locSel.innerHTML = "";
-    poParsed.locations.forEach(function (loc) {
-      var opt = document.createElement("option"); opt.value = loc.id; opt.textContent = loc.name;
-      locSel.appendChild(opt);
-    });
-    locSel.onchange = renderPoRows;
+    // No picker — see the same decision in stockTab.ts. Delivered quantities
+    // are added at the first location Shopify returns; with more than one, say
+    // which, because stock added to the wrong warehouse is a number that reads
+    // as correct in both.
+    poLocationId = poParsed.locations.length ? poParsed.locations[0].id : null;
+    var note = document.getElementById("poLocationRow");
+    note.style.display = poParsed.locations.length > 1 ? "" : "none";
+    if (poParsed.locations.length > 1) {
+      note.textContent = "Receiving at " + poParsed.locations[0].name
+        + (poParsed.locations[0].isDefault ? " (default)" : "");
+    }
     renderPoRows();
   }
 
   function currentStock(match) {
-    var locId = document.getElementById("poLocation").value;
+    var locId = poLocationId;
     var entry = (match && match.stockByLocation || []).find(function (s) { return s.locationId === locId; });
     return entry ? entry.available : 0;
   }
@@ -140,7 +145,7 @@ export function importTabScript(): string {
   // for it — so currentStock() falls back to 0, which is a guess, not a fact.
   // The confirmation modal must not print that guess as a before-figure.
   function stockIsKnown(match) {
-    var locId = document.getElementById("poLocation").value;
+    var locId = poLocationId;
     if (!match) return false;
     if (match.matchSource !== "manual") return true;
     return (match.stockByLocation || []).some(function (s) { return s.locationId === locId; });
@@ -222,13 +227,24 @@ export function importTabScript(): string {
       // Stock before → after (recomputed live as qty changes)
       var stockCell = document.createElement("td"); stockCell.className = "po-stock";
       function paint() {
-        var b = currentStock(line.match), a = b + line.deliveredQty;
         stockCell.innerHTML = "";
+        // "+5" is dropped: the Received column beside this one already says 5,
+        // and "0→5+5" was three numbers with no space between them.
+        if (!line.match) { stockCell.textContent = "—"; return; }
+        if (!stockIsKnown(line.match)) {
+          // Printing a 0 we do not have is worse than admitting we lack it:
+          // this column is what the merchant checks the delivery against.
+          var unk = document.createElement("span"); unk.className = "po-unknown";
+          unk.textContent = "? \u2192 +" + line.deliveredQty;
+          unk.title = "Current stock could not be read for this product";
+          stockCell.appendChild(unk);
+          return;
+        }
+        var b = currentStock(line.match), a = b + line.deliveredQty;
         var bs = document.createElement("span"); bs.textContent = String(b);
-        var to = document.createElement("span"); to.className = "to"; to.textContent = "→";
+        var to = document.createElement("span"); to.className = "to"; to.textContent = "\u2192";
         var as = document.createElement("span"); as.className = "aft"; as.textContent = String(a);
         stockCell.appendChild(bs); stockCell.appendChild(to); stockCell.appendChild(as);
-        if (line.deliveredQty > 0) { var d = document.createElement("span"); d.className = "delta"; d.textContent = "+" + line.deliveredQty; stockCell.appendChild(d); }
       }
 
       // Received qty
@@ -242,11 +258,15 @@ export function importTabScript(): string {
       var expiryCell = document.createElement("td");
       var expiryText = document.createElement("div");
       expiryText.textContent = line.sled || "—";
-      var expiryHint = document.createElement("div"); expiryHint.className = "po-code";
-      expiryHint.textContent = line.match && line.match.currentBbd && line.match.currentBbd.kind === "parsed"
-        ? "currently " + line.match.currentBbd.text + " · not written"
-        : "not written";
-      expiryCell.appendChild(expiryText); expiryCell.appendChild(expiryHint);
+      expiryCell.appendChild(expiryText);
+      // Only the genuinely useful half: what Shopify holds today, so the
+      // merchant can see the delivery is fresher. "not written" was repeated
+      // on all 16 rows while the page header already says it once.
+      if (line.match && line.match.currentBbd && line.match.currentBbd.kind === "parsed") {
+        var expiryHint = document.createElement("div"); expiryHint.className = "po-code";
+        expiryHint.textContent = "now " + line.match.currentBbd.text;
+        expiryCell.appendChild(expiryHint);
+      }
 
       // Skip
       var skipCell = document.createElement("td"); skipCell.className = "po-skip";
@@ -260,19 +280,51 @@ export function importTabScript(): string {
     });
   }
 
-  var poSearchT;
+  var poRun = window.searchRunner();
   async function onProductSearch(e) {
     var idx = Number(e.target.dataset.idx);
     var q = e.target.value.trim();
     var box = document.getElementById("poPick" + idx);
-    clearTimeout(poSearchT);
-    if (q.length < 2) { box.classList.remove("open"); box.innerHTML = ""; return; }
-    poSearchT = setTimeout(async function () {
+    if (q.length < 2) { poRun.cancel(); box.classList.remove("open"); box.innerHTML = ""; return; }
+
+    // Every row shares one runner, so starting a search here aborts whatever
+    // another row had in flight. That row's list would otherwise sit open on
+    // "Searching…" for the rest of the session — a spinner that can never
+    // finish, beside a second list that can. Close the others first.
+    document.querySelectorAll("#poTableBody .po-pick.open").forEach(function (other) {
+      if (other !== box) { other.classList.remove("open"); other.innerHTML = ""; }
+    });
+
+    // The search can take a couple of seconds: when nothing matches a SKU
+    // prefix the backend falls through to scanning the catalogue. Leaving the
+    // box blank meanwhile reads as broken — the same failure as closing it
+    // silently, just on a timer.
+    box.innerHTML = "";
+    var busy = document.createElement("div");
+    busy.className = "state"; busy.style.padding = "8px 10px";
+    busy.textContent = "Searching\u2026";
+    box.appendChild(busy); box.classList.add("open");
+
+    poRun(400, async function (signal) {
       try {
-        var res = await api("/admin/api/products/search?q=" + encodeURIComponent(q));
+        // Ask for stock and BBD too. Without them a hand-picked line carried
+        // stockByLocation:[] and the confirmation modal could only say
+        // "current stock unknown" — about a product whose stock the search had
+        // fetched one screen earlier.
+        var res = await api("/admin/api/products/search?stock=1&q=" + encodeURIComponent(q)
+          + (poLocationId ? "&locationId=" + encodeURIComponent(poLocationId) : ""),
+          { signal: signal });
         var data = await res.json();
+        if (signal.aborted) return; // superseded by a later keystroke
         box.innerHTML = "";
-        if (!data.variants.length) { box.classList.remove("open"); return; }
+        if (!data.variants.length) {
+          box.innerHTML = "";
+          var none = document.createElement("div");
+          none.className = "state"; none.style.padding = "8px 10px";
+          none.textContent = "No product matches that \u2014 checked titles and SKUs.";
+          box.appendChild(none); box.classList.add("open");
+          return;
+        }
         data.variants.slice(0, 8).forEach(function (v) {
           var a = document.createElement("a"); a.href = "#";
           var th;
@@ -285,32 +337,63 @@ export function importTabScript(): string {
           a.appendChild(th); a.appendChild(meta);
           a.addEventListener("click", function (ev) {
             ev.preventDefault();
-            poParsed.lines[idx].match = { variantId: v.id, inventoryItemId: null, productTitle: v.title, productId: v.productId, imageUrl: v.imageUrl, sku: v.sku, matchSource: "manual", currentBbd: { kind: "absent" }, stockByLocation: [] };
+            poParsed.lines[idx].match = {
+              variantId: v.id, inventoryItemId: null, productTitle: v.title,
+              productId: v.productId, imageUrl: v.imageUrl, sku: v.sku,
+              matchSource: "manual",
+              onlineStoreUrl: v.onlineStoreUrl || null,
+              currentBbd: v.bbd || { kind: "absent" },
+              stockByLocation: (v.available === null || v.available === undefined)
+                ? [] : [{ locationId: poLocationId, available: v.available }],
+            };
             renderPoRows();
           });
           box.appendChild(a);
         });
         box.classList.add("open");
-      } catch (err) {}
-    }, 250);
+      } catch (err) {
+        if (window.isAbort(err)) return;
+        box.innerHTML = "";
+        var perr = document.createElement("div");
+        perr.className = "state"; perr.style.padding = "8px 10px";
+        perr.textContent = "Couldn't search \u2014 check your connection and try again.";
+        box.appendChild(perr); box.classList.add("open");
+      }
+    });
   }
 
   document.getElementById("poConfirmBtn").addEventListener("click", async function () {
     var msg = document.getElementById("poConfirmMsg");
     var btn = this;
 
-    var skipped = [], adding = [];
+    var skipped = [], adding = [], net = 0;
     poParsed.lines.forEach(function (l) {
       if (l._skip || !l.match) {
-        skipped.push(l.materialCode + " " + l.description + " — " + l.deliveredQty +
-          " units, " + (l.match ? "skipped by you" : "no product matched"));
+        skipped.push([
+          l.description, l.materialCode, String(l.deliveredQty),
+          l.match ? "skipped by you" : "no product matched",
+        ]);
       } else if (!stockIsKnown(l.match)) {
         // Say what we actually know. "0 → 5" for a product that in fact holds
         // 8 is a number this modal exists to be trusted on.
-        adding.push(l.match.productTitle + " — current stock unknown → +" + l.deliveredQty);
+        net += l.deliveredQty;
+        adding.push([
+          { product: true, text: l.match.productTitle, img: l.match.imageUrl,
+            href: l.match.onlineStoreUrl, adminHref: adminProductUrl(l.match.productId) },
+          l.match.sku || "\u2014",
+          { text: "?", cls: "m-unknown" }, { text: "?", cls: "m-unknown" },
+          { text: "+" + l.deliveredQty, cls: "m-up" },
+        ]);
       } else {
         var before = currentStock(l.match);
-        adding.push(l.match.productTitle + " — " + before + " → " + (before + l.deliveredQty) + " (+" + l.deliveredQty + ")");
+        net += l.deliveredQty;
+        adding.push([
+          { product: true, text: l.match.productTitle, img: l.match.imageUrl,
+            href: l.match.onlineStoreUrl, adminHref: adminProductUrl(l.match.productId) },
+          l.match.sku || "\u2014",
+          String(before), String(before + l.deliveredQty),
+          { text: "+" + l.deliveredQty, cls: "m-up" },
+        ]);
       }
     });
 
@@ -320,10 +403,19 @@ export function importTabScript(): string {
         // Skipped lines lead, deliberately: today they are dropped silently, so
         // stock that physically arrived never reaches Shopify and the merchant
         // finds out weeks later as an unexplained shortfall — if ever.
-        { title: skipped.length + " line" + (skipped.length === 1 ? "" : "s") +
-            " will be skipped — no stock will be added", items: skipped, warn: true },
-        { title: adding.length + " line" + (adding.length === 1 ? "" : "s") + " will add stock", items: adding },
-        { title: "Best Before Dates", items: ["Previewed only — not written to Shopify"] },
+        {
+          title: skipped.length + " line" + (skipped.length === 1 ? "" : "s") +
+            " will be skipped \u2014 no stock will be added",
+          head: ["Line", "Code", "Units", "Why"],
+          rows: skipped, warn: true,
+        },
+        {
+          title: adding.length + " line" + (adding.length === 1 ? "" : "s") + " will add stock"
+            + (net ? "  \u00b7  net +" + net + " units" : ""),
+          head: ["Product", "SKU", "Now", "After", "Change"],
+          rows: adding,
+        },
+        { title: "Best Before Dates", items: ["Previewed only \u2014 not written to Shopify"] },
       ],
       "Write to Shopify"
     );
@@ -336,14 +428,18 @@ export function importTabScript(): string {
       return;
     }
 
-    btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Syncing…'; msg.textContent = "";
+    btn.disabled = true; msg.textContent = "";
+    var busy = window.busyOverlay("Adding " + adding.length + " line" + (adding.length === 1 ? "" : "s") + " to Shopify stock…");
     var fd = new FormData();
     fd.append("pdf", document.getElementById("poFile").files[0]);
-    fd.append("locationId", document.getElementById("poLocation").value);
+    fd.append("locationId", poLocationId);
     var payload = poParsed.lines.map(function (l) {
       return {
         materialCode: l.materialCode, description: l.description, deliveredQty: l.deliveredQty, sled: l.sled,
         variantId: l.match ? l.match.variantId : null,
+        // So history can say which product this line changed, rather than only
+        // the supplier's own wording for it.
+        productTitle: l.match ? l.match.productTitle : null,
         matchSource: l.match ? l.match.matchSource : null,
         skip: !!l._skip || !l.match,
       };
@@ -369,7 +465,11 @@ export function importTabScript(): string {
       // behind this pane are now stale. Refresh them rather than leaving the
       // merchant looking at pre-import numbers next time they switch back.
       if (window.__stockLoaded) { window.__stockLoaded = false; }
-    } catch (e) { msg.textContent = "Sync failed — please try again."; }
+    } catch (e) {
+      msg.textContent = "Sync failed — please try again.";
+    } finally {
+      busy.done();
+    }
     btn.disabled = false; btn.textContent = "Confirm sync";
   });
   // ---- Remembered material codes ------------------------------------------
@@ -425,20 +525,40 @@ export function importTabScript(): string {
   }
   document.getElementById("mapCodeInput").addEventListener("input", refreshMapAdd);
 
-  var mapSearchT;
+  var mapRun = window.searchRunner();
   document.getElementById("mapProdSearch").addEventListener("input", function (e) {
     var q = e.target.value.trim();
     var box = document.getElementById("mapProdResults");
     mapPick = null; refreshMapAdd();
-    clearTimeout(mapSearchT);
-    if (q.length < 2) { box.classList.remove("open"); box.innerHTML = ""; return; }
-    mapSearchT = setTimeout(async function () {
+    if (q.length < 2) { mapRun.cancel(); box.classList.remove("open"); box.innerHTML = ""; return; }
+    box.innerHTML = "";
+    var mbusy = document.createElement("div");
+    mbusy.className = "state"; mbusy.style.padding = "8px 10px";
+    mbusy.textContent = "Searching\u2026";
+    box.appendChild(mbusy); box.classList.add("open");
+    mapRun(400, async function (signal) {
       try {
-        var res = await api("/admin/api/products/search?q=" + encodeURIComponent(q));
+        var res = await api("/admin/api/products/search?q=" + encodeURIComponent(q), { signal: signal });
         var data = await res.json();
-      } catch (err) { box.classList.remove("open"); return; }
+        if (signal.aborted) return; // superseded by a later keystroke
+      } catch (err) {
+        if (window.isAbort(err)) return;
+        box.innerHTML = "";
+        var merr = document.createElement("div");
+        merr.className = "state"; merr.style.padding = "8px 10px";
+        merr.textContent = "Couldn't search \u2014 check your connection and try again.";
+        box.appendChild(merr); box.classList.add("open");
+        return;
+      }
       box.innerHTML = "";
-      if (!data.variants.length) { box.classList.remove("open"); return; }
+      if (!data.variants.length) {
+          box.innerHTML = "";
+          var none = document.createElement("div");
+          none.className = "state"; none.style.padding = "8px 10px";
+          none.textContent = "No product matches that \u2014 checked titles and SKUs.";
+          box.appendChild(none); box.classList.add("open");
+          return;
+        }
       data.variants.slice(0, 8).forEach(function (v) {
         var a = document.createElement("a"); a.href = "#";
         var th;
@@ -462,7 +582,7 @@ export function importTabScript(): string {
         box.appendChild(a);
       });
       box.classList.add("open");
-    }, 250);
+    });
   });
 
   document.getElementById("mapAddBtn").addEventListener("click", async function () {

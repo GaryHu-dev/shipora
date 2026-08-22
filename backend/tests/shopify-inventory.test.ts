@@ -37,6 +37,7 @@ describe("getVariantState", () => {
             image: { url: "https://cdn.example/variant.jpg" },
             product: {
               id: "gid://shopify/Product/1", title: "ACME Milk", featuredImage: { url: "https://cdn.example/product.jpg" },
+              onlineStoreUrl: "https://shop.example/products/acme-milk",
               descriptionHtml: "<p><strong>Best Before Date (BBD) From: Mar 2027</strong></p>",
             },
             inventoryItem: {
@@ -63,6 +64,7 @@ describe("getVariantState", () => {
       productTitle: "ACME Milk - 1L",
       productId: "gid://shopify/Product/1",
       imageUrl: "https://cdn.example/variant.jpg",
+      onlineStoreUrl: "https://shop.example/products/acme-milk",
     });
   });
 

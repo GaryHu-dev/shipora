@@ -3,6 +3,7 @@ import { describe, it, expect, beforeAll, afterEach, beforeEach } from "vitest";
 import { app } from "../src/index";
 import { SHOPIFY_API_VERSION } from "../src/shopify/graphql";
 import { addTrackedProduct, listTrackedProducts } from "../src/db/trackedProducts";
+import { listStockEvents, listStockEventLines } from "../src/db/stockEvents";
 
 beforeAll(() => {
   fetchMock.activate();
@@ -68,9 +69,13 @@ describe("GET /admin/api/stock", () => {
 
     const res = await app.request("/admin/api/stock", { headers: await authHeaders() }, env);
     expect(res.status).toBe(200);
-    const body = await res.json<{ locations: unknown[]; rows: unknown[] }>();
+    const body = await res.json<{ locations: unknown[]; rows: unknown[]; storeHandle: string }>();
     expect(body.locations).toEqual([{ id: LOC, name: "Auckland" }]);
     expect(body.rows).toEqual([]);
+    // Rows link to the product in the Shopify admin, which needs the store
+    // handle. It comes from the session's shop record — never from the page's
+    // ?shop= parameter, which the caller controls.
+    expect(body.storeHandle).toBe("demo");
   });
 
   it("returns live stock and parsed BBD for tracked products", async () => {
@@ -163,6 +168,57 @@ describe("POST /admin/api/stock/save", () => {
     expect(await res.json()).toEqual({ results: [{ variantId: V1, ok: true }] });
 
     expect((await listTrackedProducts(env.DB, "shop_1"))[0].lastCountedAt).not.toBeNull();
+  });
+
+  it("records the save in history — one event per Save, whatever its size", async () => {
+    // A count is a moment in the merchant's week ("the Tuesday count"), not N
+    // separate happenings, so one Save is one record however many rows moved.
+    const V2 = "gid://shopify/ProductVariant/2";
+    await addTrackedProduct(env.DB, { id: "tp_1", shopId: "shop_1", shopifyVariantId: V1, shopifyProductId: P1, addedAt: 1 });
+    await addTrackedProduct(env.DB, { id: "tp_2", shopId: "shop_1", shopifyVariantId: V2, shopifyProductId: P1, addedAt: 2 });
+    mockGraphQL({ data: { nodes: [variantNode(12, ""), { ...variantNode(4, ""), id: V2 }] } });
+    mockGraphQL({ data: { inventorySetQuantities: { userErrors: [] } } });
+    mockGraphQL({ data: { inventorySetQuantities: { userErrors: [] } } });
+
+    await save([
+      { variantId: V1, stock: { value: 9, compareQuantity: 12 }, counted: true },
+      { variantId: V2, stock: { value: 7, compareQuantity: 4 }, counted: true },
+    ]);
+
+    const events = await listStockEvents(env.DB, "shop_1", {});
+    expect(events).toHaveLength(1);
+    expect(events[0].kind).toBe("count");
+    expect(events[0].line_count).toBe(2);
+    expect(events[0].ok_count).toBe(2);
+    // 12→9 is -3, 4→7 is +3. A count can move stock either way; an import
+    // only ever adds, which is why the two kinds are worth telling apart.
+    expect(events[0].net_change).toBe(0);
+
+    const lines = await listStockEventLines(env.DB, events[0].id);
+    const a = lines.find((l) => l.shopify_variant_id === V1)!;
+    expect([a.qty_before, a.qty_after]).toEqual([12, 9]);
+    // A count carries no delivery-note fields at all.
+    expect(a.material_code).toBeNull();
+    expect(a.delivered_qty).toBeNull();
+  });
+
+  it("records a failed save too, with the reason", async () => {
+    // "I saved and nothing happened" is exactly what a merchant comes back to
+    // history for. A log that keeps only successes cannot answer it.
+    await addTrackedProduct(env.DB, { id: "tp_1", shopId: "shop_1", shopifyVariantId: V1, shopifyProductId: P1, addedAt: 1 });
+    mockGraphQL({ data: { nodes: [variantNode(11, "")] } });
+    mockGraphQL({
+      data: { inventorySetQuantities: { userErrors: [{ field: ["quantities"], message: "compareQuantity does not match persisted quantity" }] } },
+    });
+
+    await save([{ variantId: V1, stock: { value: 9, compareQuantity: 12 }, counted: true }]);
+
+    const events = await listStockEvents(env.DB, "shop_1", {});
+    expect(events[0].error_count).toBe(1);
+    const lines = await listStockEventLines(env.DB, events[0].id);
+    expect(lines[0].status).toBe("error");
+    expect(lines[0].error).toMatch(/changed since/i);
+    expect(lines[0].qty_after).toBeNull(); // nothing was written
   });
 
   it("still calls Shopify when the counted value is unchanged", async () => {

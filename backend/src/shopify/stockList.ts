@@ -7,6 +7,8 @@ export interface StockRow {
   title: string;
   sku: string | null;
   imageUrl: string | null;
+  /** The page a customer sees. Null when the product is not published online. */
+  onlineStoreUrl: string | null;
   inventoryItemId: string;
   stockByLocation: { locationId: string; available: number }[];
   bbd: BbdState;
@@ -29,7 +31,7 @@ query StockRows($ids: [ID!]!) {
           edges { node { location { id } quantities(names: ["available"]) { name quantity } } }
         }
       }
-      product { id title featuredImage { url } descriptionHtml }
+      product { id title featuredImage { url } descriptionHtml onlineStoreUrl onlineStorePreviewUrl }
     }
   }
 }`;
@@ -45,7 +47,7 @@ interface VariantNode {
       edges: { node: { location: { id: string }; quantities: { name: string; quantity: number }[] } }[];
     };
   };
-  product: { id: string; title: string; featuredImage: { url: string } | null; descriptionHtml: string | null };
+  product: { id: string; title: string; featuredImage: { url: string } | null; descriptionHtml: string | null; onlineStoreUrl: string | null; onlineStorePreviewUrl: string | null };
 }
 
 interface StockRowsResult {
@@ -79,6 +81,7 @@ export async function fetchStockRows(
         title: node.product.title,
         sku: node.sku,
         imageUrl: node.image?.url ?? node.product.featuredImage?.url ?? null,
+        onlineStoreUrl: node.product.onlineStoreUrl ?? node.product.onlineStorePreviewUrl ?? null,
         inventoryItemId: node.inventoryItem.id,
         stockByLocation: node.inventoryItem.inventoryLevels.edges.map((e) => ({
           locationId: e.node.location.id,

@@ -2,11 +2,13 @@
 
 Cloudflare Worker (Hono) backend for StockProof — a Shopify stock assistant covering both
 sides of the warehouse. **Goods in:** parse supplier delivery-note PDFs and add the delivered
-quantities to Shopify stock, with a downloadable per-import history (expiry-date write-back is
-built but disabled for now — see below). **Goods out:** sync orders, tag them on photo upload
-(a marker in the Shopify order **Timeline**), and surface the proof-of-shipment photos in the
-order-details **admin block**. Stores shops/users/orders/photos/import-history in **D1** and
-photo + PDF bytes in **R2**.
+quantities to Shopify stock. Expiry dates are parsed and shown but **never written back** —
+that path was removed, not disabled. **Weekly counts:** set stock per product with an
+optimistic-concurrency check, so a sale landing mid-count is rejected rather than erased.
+Both are recorded in one **stock-event history**. **Goods out:** sync orders, tag them on
+photo upload (a marker in the Shopify order **Timeline**), and surface the proof-of-shipment
+photos in the order-details **admin block**. Stores shops/users/orders/photos/stock-history
+in **D1** and photo + PDF bytes in **R2**.
 
 ## Stack
 
@@ -186,8 +188,14 @@ never blocks the rest; every line — including skipped — is recorded):
 
 The original PDF goes to R2 at `po/{shop_id}/{import_id}.pdf` (the same bucket as photos, a
 disjoint keyspace — the retention cron only touches photos, so PDFs are never auto-deleted).
-Each import and its per-line diff are stored in `purchase_order_imports` /
-`purchase_order_import_lines` (migration `0004`) and surfaced under the admin **History** tab.
+Each import and its per-line diff are stored in `stock_events` / `stock_event_lines`
+(migrations `0006`–`0007`) and surfaced under the admin **History** tab. **Weekly counts land
+in the same two tables**, distinguished by `kind` (`import` | `count`): the two are the same
+shape of event — a batch of lines, each with a before and an after, written at one location
+at one moment — and the merchant wants one timeline, not two lists to interleave by eye.
+Import-only columns (`filename`, `pdf_r2_key`, `material_code`, `delivered_qty`, `sled`) are
+NULL on a count, so nullability carries meaning. The `purchase_order_*` tables they replaced
+were empty in every shop and were dropped rather than renamed around.
 
 ## Notes
 

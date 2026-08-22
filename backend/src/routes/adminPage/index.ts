@@ -95,7 +95,7 @@ function renderQrPage(qr: string, joinUrl: string): string {
 </html>`;
 }
 
-function renderAdminPage(apiKey: string): string {
+export function renderAdminPage(apiKey: string): string {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -146,6 +146,49 @@ ${photosTabMarkup()}
     if (!res.ok) throw new Error("HTTP " + res.status);
     return res;
   }
+
+  // An async click handler that throws leaves NOTHING on screen: the promise
+  // rejects, the browser logs one line to a console nobody has open, and the
+  // button just sits there. That is indistinguishable from "the button does
+  // nothing", and it is how a real save failure was reported. Surface it.
+  function showFatal(what, err) {
+    var msg = (err && (err.message || err.reason && err.reason.message)) || String(err && err.reason || err || "unknown error");
+    var bar = document.getElementById("fatalBar");
+    if (!bar) {
+      bar = document.createElement("div"); bar.id = "fatalBar"; bar.className = "fatal-bar";
+      document.body.appendChild(bar);
+    }
+    bar.textContent = "Something went wrong in " + what + ": " + msg + " — reload the page and try again.";
+    bar.style.display = "";
+  }
+  window.addEventListener("error", function (e) { showFatal("the page", e.error || e); });
+  window.addEventListener("unhandledrejection", function (e) { showFatal("an action", e); });
+  window.__showFatal = showFatal;
+
+  // Every product picker searches through one of these.
+  //
+  // Debouncing alone is not enough, because these requests no longer take a
+  // uniform time: a SKU-prefix hit comes back in ~200ms, while a miss falls
+  // through to scanning the catalogue and takes ~2s. So a slow early request
+  // can land AFTER a fast later one and overwrite correct results with stale
+  // ones — the list would show matches for a prefix of what is now in the box.
+  // Each keystroke therefore aborts whatever the previous one started, which
+  // also stops Shopify being asked once per character.
+  function searchRunner() {
+    var timer = null, ctrl = null;
+    function cancel() { clearTimeout(timer); if (ctrl) { ctrl.abort(); ctrl = null; } }
+    var run = function (delay, fn) {
+      cancel();
+      ctrl = new AbortController();
+      var signal = ctrl.signal;
+      timer = setTimeout(function () { fn(signal); }, delay);
+    };
+    run.cancel = cancel;
+    return run;
+  }
+  window.searchRunner = searchRunner;
+  // An aborted request is not a failure — it means the merchant kept typing.
+  window.isAbort = function (err) { return !!err && err.name === "AbortError"; };
 ${photosTabScript()}
 ${stockTabScript()}
 

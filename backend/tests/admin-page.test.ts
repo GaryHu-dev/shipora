@@ -74,7 +74,11 @@ describe("GET /admin", () => {
     const res = await app.request("/admin?shop=demo.myshopify.com", {}, env);
     const html = await res.text();
 
-    expect(html).toContain('confirmBtn.title = "Confirm this count"');
+    // Assert the control exists and is labelled, not its exact tooltip: the
+    // guarantee is "a count is staged only when the merchant says so", and
+    // pinning wording made an ordinary copy change look like a broken promise.
+    expect(html).toContain('confirmBtn.textContent = "Confirm"');
+    expect(html).toContain('confirmThisRow()');
     expect(html).not.toContain('addEventListener("focus"');
   });
 

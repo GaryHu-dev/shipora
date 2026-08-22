@@ -9,6 +9,7 @@ import {
 import { fetchStockRows, setInventoryQuantity, type StockRow } from "../shopify/stockList";
 import { listActiveLocations } from "../shopify/inventory";
 import { newId } from "../ids";
+import { createStockEvent, type NewEventLine } from "../db/stockEvents";
 
 export const stockRoutes = new Hono<{ Bindings: Env; Variables: AdminVars }>();
 
@@ -34,7 +35,12 @@ stockRoutes.get("/admin/api/stock", requireAdminSession(), async (c) => {
   // which variants are tracked and when they were last counted. /admin itself
   // is already no-store; the endpoint carrying the actual numbers must be too,
   // or an intermediary can hand the merchant a figure Shopify no longer holds.
-  return c.json({ locations, rows }, 200, { "cache-control": "no-store" });
+  // The store handle, so rows can link to the product in the Shopify admin.
+  // Taken from the verified session's shop record rather than the page's
+  // ?shop= parameter, which is attacker-supplied.
+  const storeHandle = shop.shop_domain.replace(/\.myshopify\.com$/, "");
+
+  return c.json({ locations, rows, storeHandle }, 200, { "cache-control": "no-store" });
 });
 
 stockRoutes.post("/admin/api/stock/items", requireAdminSession(), async (c) => {
@@ -129,6 +135,10 @@ stockRoutes.post("/admin/api/stock/save", requireAdminSession(), async (c) => {
   const tracked = new Set((await listTrackedProducts(c.env.DB, shopId)).map((t) => t.shopifyVariantId));
 
   const results: { variantId: string; ok: boolean; error?: string }[] = [];
+  // One history line per row, built as we go. A Save is a single event in the
+  // merchant's day — "the Tuesday count" — whether it moved one product or
+  // fifty, so it becomes one record with these as its lines.
+  const eventLines: NewEventLine[] = [];
 
   // Validate and authorise every row BEFORE touching Shopify, so a malformed
   // or untracked row can never reach the batch read below. `parsed` stays 1:1
@@ -163,12 +173,24 @@ stockRoutes.post("/admin/api/stock/save", requireAdminSession(), async (c) => {
   for (const parsedRow of parsed) {
     if (!parsedRow.ok) {
       results.push({ variantId: parsedRow.variantId, ok: false, error: parsedRow.error });
+      eventLines.push({
+        id: newId("sel"), materialCode: null, description: parsedRow.variantId, productTitle: null,
+        shopifyVariantId: parsedRow.variantId, deliveredQty: null,
+        qtyBefore: null, qtyAfter: null, sled: null,
+        skipped: false, status: "error", error: parsedRow.error,
+      });
       continue;
     }
     const row = parsedRow.row;
 
     if (!tracked.has(row.variantId)) {
       results.push({ variantId: row.variantId, ok: false, error: "product is not tracked by this shop" });
+      eventLines.push({
+        id: newId("sel"), materialCode: null, description: row.variantId, productTitle: null,
+        shopifyVariantId: row.variantId, deliveredQty: null,
+        qtyBefore: null, qtyAfter: null, sled: null,
+        skipped: false, status: "error", error: "product is not tracked by this shop",
+      });
       continue;
     }
 
@@ -189,6 +211,16 @@ stockRoutes.post("/admin/api/stock/save", requireAdminSession(), async (c) => {
         await markCounted(c.env.DB, shopId, row.variantId, Math.floor(Date.now() / 1000));
       }
       results.push({ variantId: row.variantId, ok: true });
+      eventLines.push({
+        id: newId("sel"), materialCode: null,
+        description: state.title || row.variantId,
+        productTitle: state.title || null,
+        shopifyVariantId: row.variantId, deliveredQty: null,
+        // compareQuantity IS the before-figure: it is what the merchant saw on
+        // screen, and Shopify accepted the write only because it still held.
+        qtyBefore: row.stock.compareQuantity, qtyAfter: row.stock.value, sled: null,
+        skipped: false, status: "ok", error: null,
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : "unknown error";
       // Translate Shopify's wording into something a merchant can act on —
@@ -197,7 +229,35 @@ stockRoutes.post("/admin/api/stock/save", requireAdminSession(), async (c) => {
         ? "Stock changed since loading — refresh and count again"
         : message.replace(/^inventorySetQuantities userErrors:\s*/i, "");
       results.push({ variantId: row.variantId, ok: false, error: friendly });
+      eventLines.push({
+        id: newId("sel"), materialCode: null,
+        description: live.get(row.variantId)?.title || row.variantId,
+        productTitle: live.get(row.variantId)?.title || null,
+        shopifyVariantId: row.variantId, deliveredQty: null,
+        qtyBefore: row.stock.compareQuantity, qtyAfter: null, sled: null,
+        skipped: false, status: "error", error: friendly,
+      });
     }
+  }
+
+  // Recorded even when every line failed: "I tried to save and it all bounced"
+  // is exactly the thing a merchant later needs to find, and a history that
+  // only keeps successes cannot answer why the numbers look untouched.
+  //
+  // Deliberately after the writes and outside their try: a failure to record
+  // history must not make a merchant think stock was not written, when it was.
+  try {
+    await createStockEvent(c.env.DB, {
+      id: newId("evt"), shopId, kind: "count",
+      filename: null, pdfR2Key: null, locationId,
+      createdAt: Math.floor(Date.now() / 1000), lines: eventLines,
+    });
+  } catch (err) {
+    // Nothing to tell the merchant — the stock write already succeeded or
+    // failed on its own terms, and that is what the response reports. But a
+    // history that quietly stops recording is worse than one that is missing:
+    // it looks complete. Log it so the gap is findable.
+    console.error("stock count history not recorded", { shopId, rows: eventLines.length, err: String(err) });
   }
 
   return c.json({ results });
